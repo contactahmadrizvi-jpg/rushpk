@@ -36,7 +36,7 @@ export interface CreateOrderInput {
   skipStockCheck?: boolean;
 }
 
-export async function createOrder(input: CreateOrderInput): Promise<string> {
+export async function createOrder(input: CreateOrderInput): Promise<Order> {
   if (!input.skipStockCheck) {
     const stock = await checkStockForOrderItems(input.items);
     if (!stock.ok) {
@@ -79,6 +79,7 @@ export async function createOrder(input: CreateOrderInput): Promise<string> {
   };
 
   const orderId = await ordersRepo.create(orderData);
+  const order: Order = { id: orderId, ...orderData };
 
   if (input.paymentMethod !== "cash" || input.source === "pos") {
     await paymentsRepo.create({
@@ -92,13 +93,9 @@ export async function createOrder(input: CreateOrderInput): Promise<string> {
     } as Omit<Payment, "id">);
   }
 
-  await deductInventoryForOrder(
-    orderId,
-    input.items,
-    input.createdBy ?? "system"
-  );
+  await deductInventoryForOrder(orderId, input.items, input.createdBy ?? "system");
 
-  return orderId;
+  return order;
 }
 
 export async function updateOrderStatus(

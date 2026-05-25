@@ -1,5 +1,5 @@
-import type { Order, OrderItem, RestaurantSettings } from "@/types";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import type { Order, OrderItem } from "@/types";
+import { formatCurrency, parseDate } from "@/lib/utils";
 import { RESTAURANT } from "@/constants";
 import { getSettings } from "@/services/settings.service";
 
@@ -7,19 +7,36 @@ export type PrintHeader = {
   name: string;
   location: string;
   phone: string;
+  email?: string;
   logoUrl?: string;
 };
+
+let cachedHeader: PrintHeader | null = null;
+let printChain: Promise<void> = Promise.resolve();
 
 function formatOrderLabel(order: Order): string {
   const n = order.dailyOrderNumber ?? order.orderNumber;
   return `#${n}`;
 }
 
-function orderTypeLabel(type: Order["type"], source: Order["source"]): string {
-  const t = type.replace("_", " ").toUpperCase();
-  if (source === "website") return `${t} · ONLINE`;
-  if (source === "pos") return `${t} · POS`;
-  return t;
+function formatReceiptDateTime(iso: string): string {
+  const d = parseDate(iso);
+  if (!d) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function orderTypeLabel(type: Order["type"]): string {
+  if (type === "dine_in") return "DINE IN";
+  if (type === "takeaway") return "TAKEAWAY";
+  if (type === "delivery") return "DELIVERY";
+  return "ONLINE";
+}
+
+export async function preloadPrintHeader(): Promise<PrintHeader> {
+  if (cachedHeader) return cachedHeader;
+  cachedHeader = await resolvePrintHeader();
+  return cachedHeader;
 }
 
 async function resolvePrintHeader(): Promise<PrintHeader> {
@@ -27,52 +44,57 @@ async function resolvePrintHeader(): Promise<PrintHeader> {
     const settings = await getSettings();
     if (settings) {
       return {
-        name: settings.printerSettings?.restaurantName ?? settings.name,
-        location: `${settings.address}, ${settings.city}`,
+        name: (settings.printerSettings?.restaurantName ?? settings.name).toUpperCase(),
+        location: `${settings.address}, ${settings.city}`.toUpperCase(),
         phone: settings.phone,
+        email: settings.email,
         logoUrl: settings.logoUrl,
       };
     }
   } catch {
-    /* use defaults */
+    /* defaults */
   }
   return {
-    name: RESTAURANT.name,
-    location: RESTAURANT.location,
+    name: RESTAURANT.name.toUpperCase(),
+    location: RESTAURANT.location.toUpperCase(),
     phone: RESTAURANT.phone,
+    email: RESTAURANT.email,
   };
 }
 
-/** Opens system print dialog with thermal-sized receipt (80mm). */
-export async function printReceipt(order: Order, header?: PrintHeader): Promise<boolean> {
-  const h = header ?? (await resolvePrintHeader());
-  const html = buildReceiptHTML(order, h);
-  return printHtml(html, "receipt");
+/** One print dialog: receipt + KOT (page break). No duplicate popups. */
+export async function printPosDocuments(order: Order, header?: PrintHeader): Promise<void> {
+  const h = header ?? (await preloadPrintHeader());
+  const html = `${buildReceiptHTML(order, h)}<div style="page-break-before:always"></div>${buildKOTBody(order)}`;
+  await enqueuePrint(wrapPrintDocument(html, `Order ${formatOrderLabel(order)}`));
 }
 
-/** Kitchen order ticket — 72mm thermal layout. */
-export async function printKOT(order: Order): Promise<boolean> {
-  const html = buildKOTHTML(order);
-  return printHtml(html, "kot");
+export async function printReceipt(order: Order, header?: PrintHeader): Promise<void> {
+  const h = header ?? (await preloadPrintHeader());
+  await enqueuePrint(wrapPrintDocument(buildReceiptHTML(order, h), `Receipt ${formatOrderLabel(order)}`));
 }
 
-/**
- * Real browser print via hidden iframe (works when popups are blocked).
- * User selects thermal printer in the print dialog; set as default for one-click printing.
- */
-export function printHtml(html: string, label: string): Promise<boolean> {
+export async function printKOT(order: Order): Promise<void> {
+  await enqueuePrint(wrapPrintDocument(buildKOTBody(order), `KOT ${formatOrderLabel(order)}`));
+}
+
+function enqueuePrint(html: string): Promise<void> {
+  const job = printChain.then(() => printHtmlOnce(html));
+  printChain = job.catch(() => undefined);
+  return job;
+}
+
+function printHtmlOnce(html: string): Promise<void> {
   return new Promise((resolve) => {
     const iframe = document.createElement("iframe");
-    iframe.setAttribute("title", `print-${label}`);
-    iframe.style.cssText =
-      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
     document.body.appendChild(iframe);
 
     const win = iframe.contentWindow;
     const doc = win?.document;
     if (!doc || !win) {
-      document.body.removeChild(iframe);
-      resolve(false);
+      iframe.remove();
+      resolve();
       return;
     }
 
@@ -80,33 +102,30 @@ export function printHtml(html: string, label: string): Promise<boolean> {
     doc.write(html);
     doc.close();
 
-    const cleanup = () => {
-      setTimeout(() => {
-        if (iframe.parentNode) document.body.removeChild(iframe);
-      }, 500);
+    const done = () => {
+      setTimeout(() => iframe.remove(), 300);
+      resolve();
     };
 
-    const triggerPrint = () => {
+    const runPrint = () => {
       try {
         win.focus();
         win.print();
-        resolve(true);
-      } catch {
-        resolve(false);
       } finally {
-        cleanup();
+        done();
       }
     };
 
-    if (doc.readyState === "complete") {
-      setTimeout(triggerPrint, 150);
-    } else {
-      iframe.onload = () => setTimeout(triggerPrint, 150);
-    }
+    if (doc.readyState === "complete") runPrint();
+    else iframe.onload = runPrint;
   });
 }
 
-function itemCustomizationLine(item: OrderItem): string {
+function wrapPrintDocument(body: string, title: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${body}</body></html>`;
+}
+
+function itemExtras(item: OrderItem): string {
   const c = item.customization;
   if (!c) return "";
   const parts: string[] = [];
@@ -114,138 +133,141 @@ function itemCustomizationLine(item: OrderItem): string {
   if (c.addonNames?.length) parts.push(c.addonNames.join(", "));
   if (c.extraCheese) parts.push("Extra cheese");
   if (c.spiceLevel) parts.push(c.spiceLevel);
-  if (c.notes) parts.push(`Note: ${c.notes}`);
+  if (c.notes) parts.push(c.notes);
   if (!parts.length) return "";
-  return `<div style="font-size:10px;color:#555;margin-top:2px">${escapeHtml(parts.join(" · "))}</div>`;
+  return `<div class="item-note">${escapeHtml(parts.join(" · "))}</div>`;
 }
 
 function buildReceiptHTML(order: Order, header: PrintHeader): string {
   const label = formatOrderLabel(order);
-  const items = order.items
+  const dt = formatReceiptDateTime(order.createdAt);
+  const tableLine =
+    order.tableNumber != null
+      ? `<div class="row"><span>TABLE</span><span>${order.tableNumber}</span></div>`
+      : `<div class="row"><span>TYPE</span><span>${orderTypeLabel(order.type)}</span></div>`;
+
+  const itemRows = order.items
     .map(
       (i) => `
-      <tr>
-        <td style="padding:4px 0;vertical-align:top;width:70%">
-          ${i.quantity}× ${escapeHtml(i.name)}
-          ${itemCustomizationLine(i)}
-        </td>
-        <td style="padding:4px 0;text-align:right;white-space:nowrap;vertical-align:top">${formatCurrency(i.subtotal)}</td>
-      </tr>`
+    <div class="item-row">
+      <span class="item-name">${i.quantity}X ${escapeHtml(i.name.toUpperCase())}</span>
+      <span class="item-price">${formatCurrency(i.subtotal)}</span>
+    </div>${itemExtras(i)}`
     )
     .join("");
 
   const addr = order.deliveryAddress
-    ? `<div style="margin-top:6px;font-size:11px">${escapeHtml(order.deliveryAddress.street)}, ${escapeHtml(order.deliveryAddress.area)}<br>${escapeHtml(order.deliveryAddress.city)}</div>`
+    ? `<div class="addr">${escapeHtml(order.deliveryAddress.street)}, ${escapeHtml(order.deliveryAddress.area)}, ${escapeHtml(order.deliveryAddress.city)}</div>`
     : "";
 
   const logo = header.logoUrl
-    ? `<img src="${escapeHtml(header.logoUrl)}" alt="" style="max-height:40px;margin:0 auto 6px;display:block" />`
-    : "";
+    ? `<img src="${escapeHtml(header.logoUrl)}" class="logo-img" alt="" />`
+    : `<div class="logo-icon">🍴</div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${label}</title>
+  return `
 <style>
-  @page { size: 80mm auto; margin: 4mm; }
-  @media print {
-    html, body { width: 80mm; margin: 0; padding: 0; }
-    .no-print { display: none !important; }
+  @page { size: 80mm auto; margin: 3mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 11px;
+    width: 72mm;
+    max-width: 72mm;
+    margin: 0 auto;
+    padding: 6px 4px;
+    color: #000;
+    background: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
   }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Consolas,'Courier New',monospace;font-size:12px;width:80mm;max-width:80mm;margin:0 auto;padding:8px;color:#000;background:#fff}
-  .logo{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:8px}
-  .logo h1{font-size:15px;font-weight:800}
-  .logo p{font-size:10px;margin-top:2px}
-  .order-no{text-align:center;font-size:26px;font-weight:900;margin:8px 0;letter-spacing:1px}
-  .meta{font-size:11px;line-height:1.45;margin-bottom:8px}
-  .meta strong{display:inline-block;min-width:68px}
-  table.items{width:100%;border-collapse:collapse;margin:6px 0}
-  table.totals{width:100%;font-size:12px}
-  table.totals td{padding:2px 0}
-  .total-row{font-size:15px;font-weight:800;border-top:2px solid #000;padding-top:5px!important}
-  .footer{text-align:center;margin-top:10px;font-size:10px;border-top:1px dashed #666;padding-top:6px}
-  hr{border:none;border-top:1px dashed #999;margin:6px 0}
-  .no-print{text-align:center;padding:8px;font-family:sans-serif;font-size:11px;color:#666}
-</style></head><body>
-  <p class="no-print">Select your thermal printer, then print. Paper: 80mm.</p>
-  <div class="logo">
-    ${logo}
-    <h1>${escapeHtml(header.name)}</h1>
-    <p>${escapeHtml(header.location)}</p>
-    <p>Tel: ${escapeHtml(header.phone)}</p>
-  </div>
-  <div class="order-no">ORDER ${label}</div>
-  <div class="meta">
-    <div><strong>Date:</strong> ${formatDate(order.createdAt)}</div>
-    <div><strong>Customer:</strong> ${escapeHtml(order.customerName)}</div>
-    <div><strong>Phone:</strong> ${escapeHtml(order.customerPhone)}</div>
-    <div><strong>Type:</strong> ${orderTypeLabel(order.type, order.source)}</div>
-    ${order.tableNumber != null ? `<div><strong>Table:</strong> ${order.tableNumber}</div>` : ""}
-    ${order.deliveryNotes ? `<div><strong>Notes:</strong> ${escapeHtml(order.deliveryNotes)}</div>` : ""}
-    ${addr}
-  </div>
-  <hr>
-  <table class="items">${items}</table>
-  <hr>
-  <table class="totals">
-    <tr><td>Subtotal</td><td style="text-align:right">${formatCurrency(order.subtotal)}</td></tr>
-    ${order.discount > 0 ? `<tr><td>Discount</td><td style="text-align:right">-${formatCurrency(order.discount)}</td></tr>` : ""}
-    ${order.tax > 0 ? `<tr><td>Tax</td><td style="text-align:right">${formatCurrency(order.tax)}</td></tr>` : ""}
-    ${order.deliveryCharge > 0 ? `<tr><td>Delivery</td><td style="text-align:right">${formatCurrency(order.deliveryCharge)}</td></tr>` : ""}
-    <tr class="total-row"><td>TOTAL</td><td style="text-align:right">${formatCurrency(order.total)}</td></tr>
-    <tr><td>Payment</td><td style="text-align:right">${order.paymentMethod.toUpperCase()} · ${order.paymentStatus.toUpperCase()}</td></tr>
-  </table>
-  <div class="footer">
-    Thank you!<br>
-    ${escapeHtml(header.name)}<br>
-    ${new Date().toLocaleString("en-PK")}
-  </div>
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.focus(); window.print(); }, 200);
-    };
-  <\/script>
-</body></html>`;
+  .center { text-align: center; }
+  .logo-icon { font-size: 22px; margin-bottom: 4px; }
+  .logo-img { max-height: 36px; margin: 0 auto 6px; display: block; }
+  .brand { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; }
+  .sub { font-size: 9px; margin-top: 3px; line-height: 1.35; font-weight: 400; }
+  .rule { border: none; border-top: 1px solid #000; margin: 8px 0; }
+  .rule-dash { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  .datetime { font-size: 10px; margin: 6px 0; }
+  .row { display: flex; justify-content: space-between; font-size: 10px; margin: 2px 0; }
+  .item-row { display: flex; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 11px; }
+  .item-name { flex: 1; font-weight: 700; }
+  .item-price { white-space: nowrap; font-weight: 700; }
+  .item-note { font-size: 9px; margin: -2px 0 4px 8px; text-transform: none; font-weight: 400; }
+  .totals .row { margin: 4px 0; }
+  .total-big { font-size: 13px; font-weight: 900; margin-top: 4px; padding-top: 4px; border-top: 2px solid #000; }
+  .pay-grid { font-size: 9px; margin-top: 6px; }
+  .pay-grid .row { margin: 3px 0; }
+  .footer { text-align: center; font-size: 9px; margin-top: 10px; line-height: 1.5; font-weight: 400; }
+  .addr { font-size: 9px; margin: 4px 0; text-transform: none; }
+  .customer { font-size: 10px; margin: 4px 0; text-transform: none; }
+</style>
+<div class="center">${logo}</div>
+<div class="center brand">${escapeHtml(header.name)}</div>
+<div class="center sub">${escapeHtml(header.location)}</div>
+<div class="center sub">PHONE: ${escapeHtml(header.phone)}</div>
+${header.email ? `<div class="center sub">${escapeHtml(header.email)}</div>` : ""}
+<hr class="rule" />
+<div class="center datetime">${dt}</div>
+<div class="row"><span>RECEIPT</span><span>${label}</span></div>
+${tableLine}
+<div class="customer">${escapeHtml(order.customerName)} · ${escapeHtml(order.customerPhone)}</div>
+${addr}
+${order.deliveryNotes ? `<div class="customer">NOTES: ${escapeHtml(order.deliveryNotes)}</div>` : ""}
+<hr class="rule-dash" />
+${itemRows}
+<hr class="rule" />
+<div class="totals">
+  <div class="row"><span>SUBTOTAL</span><span>${formatCurrency(order.subtotal)}</span></div>
+  ${order.discount > 0 ? `<div class="row"><span>DISCOUNT</span><span>-${formatCurrency(order.discount)}</span></div>` : ""}
+  ${order.tax > 0 ? `<div class="row"><span>TAX</span><span>${formatCurrency(order.tax)}</span></div>` : ""}
+  ${order.deliveryCharge > 0 ? `<div class="row"><span>DELIVERY</span><span>${formatCurrency(order.deliveryCharge)}</span></div>` : ""}
+  <div class="row total-big"><span>TOTAL</span><span>${formatCurrency(order.total)}</span></div>
+</div>
+<hr class="rule-dash" />
+<div class="pay-grid">
+  <div class="row"><span>METHOD</span><span>${order.paymentMethod.toUpperCase()}</span></div>
+  <div class="row"><span>STATUS</span><span>${order.paymentStatus.toUpperCase()}</span></div>
+  <div class="row"><span>SOURCE</span><span>${order.source === "website" ? "ONLINE" : "POS"}</span></div>
+</div>
+<hr class="rule-dash" />
+<div class="footer">
+  TIP IS NOT INCLUDED.<br/>
+  PLEASE COME AGAIN!<br/>
+  THANK YOU FOR DINING WITH US!
+</div>`;
 }
 
-function buildKOTHTML(order: Order): string {
+function buildKOTBody(order: Order): string {
   const label = formatOrderLabel(order);
   const items = order.items
-    .map((i) => {
-      const notes = i.customization?.notes
-        ? `<div style="font-size:11px;color:#b45309;font-weight:600">Note: ${escapeHtml(i.customization.notes)}</div>`
-        : "";
-      const extras = itemCustomizationLine(i);
-      return `<div style="border-bottom:2px dashed #000;padding:10px 0">
-        <div style="font-size:20px;font-weight:900">${i.quantity} × ${escapeHtml(i.name)}</div>${extras}${notes}
-      </div>`;
-    })
+    .map(
+      (i) => `
+    <div class="kot-item">
+      <div class="kot-qty">${i.quantity} × ${escapeHtml(i.name)}</div>
+      ${itemExtras(i)}
+    </div>`
+    )
     .join("");
 
-  const sourceBadge =
-    order.source === "website"
-      ? '<span style="background:#1d4ed8;color:#fff;padding:3px 10px;font-size:12px;font-weight:700">ONLINE</span>'
-      : '<span style="background:#15803d;color:#fff;padding:3px 10px;font-size:12px;font-weight:700">POS</span>';
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>KOT ${label}</title>
+  return `
 <style>
   @page { size: 72mm auto; margin: 3mm; }
-  @media print { html, body { width: 72mm; margin: 0; } }
-  body{font-family:Arial,sans-serif;font-size:13px;width:72mm;margin:0;padding:8px;color:#000}
-  h1{font-size:14px;margin:0 0 6px;font-weight:800}
-  .no{font-size:36px;font-weight:900;margin:6px 0;line-height:1}
-</style></head><body>
-  <h1>KITCHEN ORDER</h1>
-  ${sourceBadge}
-  <div class="no">${label}</div>
-  <p><strong>${orderTypeLabel(order.type, order.source)}</strong>
-  ${order.tableNumber != null ? ` · Table <strong>${order.tableNumber}</strong>` : ""}</p>
-  <p style="font-size:11px">${formatDate(order.createdAt)}</p>
-  <p style="font-size:14px;margin-top:4px"><strong>${escapeHtml(order.customerName)}</strong><br>${escapeHtml(order.customerPhone)}</p>
-  <hr style="border:none;border-top:2px solid #000;margin:8px 0">
-  ${items}
-  <script>
-    window.onload = function() { setTimeout(function() { window.focus(); window.print(); }, 200); };
-  <\/script>
-</body></html>`;
+  body { font-family: Arial, sans-serif; font-size: 12px; width: 68mm; margin: 0; padding: 8px; color: #000; text-transform: none; }
+  h1 { font-size: 13px; margin: 0 0 8px; font-weight: 800; }
+  .badge { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
+  .order-no { font-size: 32px; font-weight: 900; margin: 8px 0; }
+  .kot-item { border-bottom: 2px dashed #000; padding: 8px 0; }
+  .kot-qty { font-size: 18px; font-weight: 800; }
+  .item-note { font-size: 11px; color: #b45309; margin-top: 4px; }
+</style>
+<h1>KITCHEN ORDER TICKET</h1>
+<span class="badge">${order.source === "website" ? "ONLINE" : "POS"}</span>
+<div class="order-no">${label}</div>
+<p><strong>${orderTypeLabel(order.type)}</strong>${order.tableNumber != null ? ` · Table ${order.tableNumber}` : ""}</p>
+<p style="font-size:11px">${formatReceiptDateTime(order.createdAt)}</p>
+<p><strong>${escapeHtml(order.customerName)}</strong><br/>${escapeHtml(order.customerPhone)}</p>
+<hr style="border:none;border-top:2px solid #000;margin:8px 0"/>
+${items}`;
 }
 
 function escapeHtml(text: string): string {

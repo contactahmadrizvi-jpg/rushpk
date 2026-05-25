@@ -37,21 +37,48 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "dashboard",
     "menu",
     "orders",
+    "online_orders",
     "inventory",
     "employees",
+    "roles",
     "reports",
     "settings",
     "pos",
     "kitchen",
-    "coupons",
-    "deals",
+    "attendance",
   ],
-  cashier: ["pos", "orders", "tables"],
+  cashier: ["pos", "orders"],
   kitchen_staff: ["kitchen", "orders"],
   delivery_rider: ["orders", "delivery"],
-  employee: ["attendance", "profile"],
-  customer: ["website", "profile", "orders"],
+  employee: ["attendance"],
+  customer: ["website"],
 };
+
+/** Permissions admin can assign per staff user */
+export const STAFF_PERMISSION_OPTIONS = [
+  { id: "dashboard", label: "Dashboard", group: "Admin" },
+  { id: "menu", label: "Menu management", group: "Admin" },
+  { id: "inventory", label: "Inventory", group: "Admin" },
+  { id: "orders", label: "All orders", group: "Orders" },
+  { id: "online_orders", label: "Online orders only", group: "Orders" },
+  { id: "employees", label: "Employees", group: "Admin" },
+  { id: "roles", label: "Roles & access", group: "Admin" },
+  { id: "reports", label: "Reports", group: "Admin" },
+  { id: "attendance", label: "Attendance", group: "Admin" },
+  { id: "settings", label: "Settings", group: "Admin" },
+  { id: "pos", label: "POS", group: "Operations" },
+  { id: "kitchen", label: "Kitchen display", group: "Operations" },
+] as const;
+
+export const STAFF_ROLES: UserRole[] = [
+  "super_admin",
+  "admin",
+  "manager",
+  "cashier",
+  "kitchen_staff",
+  "delivery_rider",
+  "employee",
+];
 
 export const ADMIN_ROLES: UserRole[] = [
   "super_admin",

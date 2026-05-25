@@ -50,6 +50,8 @@ export interface AppUser {
   displayName: string;
   phone?: string;
   role: UserRole;
+  /** Custom access list; when set, overrides default role permissions */
+  permissions?: string[];
   photoURL?: string;
   addresses?: Address[];
   createdAt: string;

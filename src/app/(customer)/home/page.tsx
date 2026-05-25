@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, Clock, Star, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,25 +43,45 @@ export default function HomePage() {
 
   return (
     <div>
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary via-[#e85d04] to-[#f48c06] px-4 py-20 text-white lg:py-28">
-        <div className="mx-auto max-w-7xl">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <p className="text-sm font-medium uppercase tracking-widest opacity-90">Sheikhupura&apos;s Finest</p>
-            <h1 className="mt-2 max-w-2xl text-4xl font-black leading-tight md:text-6xl">
-              Rush Pizza & Burger
+      <section className="relative min-h-[min(85vh,720px)] overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1920&q=85"
+          alt="Fresh pizza and burgers"
+          fill
+          priority
+          className="object-cover"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/30" />
+        <div className="relative mx-auto flex min-h-[min(85vh,720px)] max-w-7xl items-center px-4 py-16 lg:py-24">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl text-white"
+          >
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-300">
+              Sheikhupura · Rush Pizza & Burger
+            </p>
+            <h1 className="mt-3 text-4xl font-black leading-[1.05] md:text-6xl lg:text-7xl">
+              Hot pizza.<br />
+              Loaded burgers.
             </h1>
-            <p className="mt-4 max-w-lg text-lg opacity-90">
-              Crispy burgers, wood-fired taste pizzas — delivered hot to your door.
+            <p className="mt-5 max-w-lg text-lg text-white/90">
+              Order shawarma, parathas, premium pizzas and more — delivery or pickup.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link href="/menu">
-                <Button size="lg" variant="secondary" className="gap-2 text-primary">
+                <Button size="lg" className="gap-2 bg-primary text-lg font-bold shadow-lg hover:bg-primary/90">
                   Order Now <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
-              <Link href="/deals">
-                <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20">
-                  View Deals
+              <Link href="/track">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/50 bg-white/10 text-lg text-white backdrop-blur hover:bg-white/20"
+                >
+                  Track Order
                 </Button>
               </Link>
             </div>
@@ -68,13 +89,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {!isFirebaseConfigured() && (
-        <div className="mx-auto max-w-7xl px-4 py-6">
-          <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 text-sm">
-            Configure Firebase in <code>.env.local</code> to load live menu data.
-          </div>
-        </div>
-      )}
 
       <section className="mx-auto max-w-7xl px-4 py-12">
         <div className="grid gap-4 md:grid-cols-3">
@@ -137,7 +151,7 @@ export default function HomePage() {
         </section>
       ) : homeSections.length === 0 ? (
         <section className="mx-auto max-w-7xl px-4 pb-16">
-          <p className="text-muted-foreground">Menu coming soon. Add items in Admin → Menu.</p>
+          <p className="text-muted-foreground">Our menu is being updated. Check back soon.</p>
         </section>
       ) : (
         homeSections.map(({ cat, items: catItems }) => (

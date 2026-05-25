@@ -10,8 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { usePOSStore } from "@/stores/pos-store";
 import { subscribeMenuItems, getActiveCategories } from "@/services/menu.service";
-import { createOrder, getOrderById } from "@/services/orders.service";
-import { printReceipt, printKOT } from "@/lib/print";
+import { createOrder } from "@/services/orders.service";
+import { preloadPrintHeader, printPosDocuments } from "@/lib/print";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { MenuItem, OrderItem, OrderType, MenuCategory } from "@/types";
 import { useAuthStore } from "@/stores/auth-store";
@@ -60,6 +60,7 @@ export default function POSPage() {
   } = usePOSStore();
 
   useEffect(() => {
+    preloadPrintHeader();
     getActiveCategories().then((cats) => {
       setCategories(cats);
       setActiveCategory((prev) => prev || cats[0]?.id || "");
@@ -113,7 +114,7 @@ export default function POSPage() {
         subtotal: line.subtotal,
       }));
 
-      const orderId = await createOrder({
+      const order = await createOrder({
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         type: orderType,
@@ -129,14 +130,10 @@ export default function POSPage() {
         createdBy: profile?.id,
       });
 
-      const order = await getOrderById(orderId);
-      if (order) {
-        printKOT(order);
-        printReceipt(order);
-      }
-      const num = order?.dailyOrderNumber ?? order?.orderNumber;
-      toast.success(`Order #${num} placed — printing receipt`);
+      const num = order.dailyOrderNumber ?? order.orderNumber;
       clearOrder();
+      toast.success(`Order #${num} placed`);
+      void printPosDocuments(order);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
     }
@@ -263,26 +260,26 @@ export default function POSPage() {
           <div className="grid gap-2 border-b p-3">
             <button
               type="button"
-              className="text-left text-xs font-semibold text-primary hover:underline"
+              className="text-left text-xs font-semibold text-slate-600 hover:text-primary"
               onClick={() => setCustomer("Walk-in", customerPhone || "03000000000")}
             >
-              + Quick: Walk-in customer
+              Walk-in customer
             </button>
             <Input
-              placeholder="Name *"
+              aria-label="Customer name"
               className="h-10"
               value={customerName}
               onChange={(e) => setCustomer(e.target.value, customerPhone)}
             />
             <Input
-              placeholder="Phone *"
+              aria-label="Customer phone"
               className="h-10"
               value={customerPhone}
               onChange={(e) => setCustomer(customerName, e.target.value)}
             />
             {orderType === "dine_in" && (
               <Input
-                placeholder="Table #"
+                aria-label="Table number"
                 type="number"
                 className="h-10"
                 value={tableNumber ?? ""}
@@ -344,10 +341,10 @@ export default function POSPage() {
             </div>
             <Button className="h-14 w-full text-lg font-bold" onClick={placeOrder}>
               <Banknote className="mr-2 h-6 w-6" />
-              PAY & PRINT (F2)
+              Pay · Print (F2)
             </Button>
             <p className="flex items-center justify-center gap-1 text-center text-[10px] text-slate-400">
-              <Printer className="h-3 w-3" /> Receipt + KOT auto-print
+              <Printer className="h-3 w-3" /> One print dialog (receipt + kitchen)
             </p>
           </div>
         </aside>

@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCartStore } from "@/stores/cart-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { createOrder } from "@/services/orders.service";
+import { addTrackedOrder } from "@/lib/order-tracking";
 import { validateCoupon } from "@/services/coupons.service";
 import { getSettings, getDefaultSettings } from "@/services/settings.service";
 import { formatCurrency } from "@/lib/utils";
@@ -78,7 +79,7 @@ export default function CheckoutPage() {
         subtotal: line.subtotal,
       }));
 
-      const orderId = await createOrder({
+      const order = await createOrder({
         customerName: data.name,
         customerPhone: data.phone,
         userId: profile?.id,
@@ -103,9 +104,10 @@ export default function CheckoutPage() {
         source: "website",
       });
 
+      addTrackedOrder(order.id);
       clearCart();
       toast.success("Order placed!");
-      router.push(`/track/${orderId}`);
+      router.push(`/track/${order.id}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Order failed");
     } finally {
@@ -132,7 +134,7 @@ export default function CheckoutPage() {
         </div>
         <div className="space-y-2 rounded-xl border p-4">
           <label className="flex items-center gap-2"><input type="radio" value="cash" {...register("paymentMethod")} /> Cash on Delivery</label>
-          <label className="flex items-center gap-2"><input type="radio" value="online" {...register("paymentMethod")} /> Online Payment (placeholder)</label>
+          <label className="flex items-center gap-2"><input type="radio" value="online" {...register("paymentMethod")} /> Card / Online</label>
         </div>
         <div className="rounded-xl border p-4 text-sm">
           <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
