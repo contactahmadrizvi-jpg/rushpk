@@ -8,7 +8,8 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase/config";
-import { COLLECTIONS, ROLE_PERMISSIONS } from "@/constants";
+import { COLLECTIONS } from "@/constants";
+import { userHasPermission } from "@/lib/permissions";
 import type { AppUser, UserRole } from "@/types";
 
 export async function registerUser(
@@ -58,6 +59,7 @@ export async function getUserProfile(uid: string): Promise<AppUser | null> {
     displayName: data.displayName ?? data.name ?? "User",
     phone: data.phone,
     role: (data.role as UserRole) ?? "customer",
+    permissions: data.permissions as string[] | undefined,
     photoURL: data.photoURL,
     addresses: data.addresses,
     createdAt: data.createdAt ?? new Date().toISOString(),
@@ -70,7 +72,6 @@ export function subscribeAuth(callback: (user: User | null) => void): () => void
   return onAuthStateChanged(getFirebaseAuth(), callback);
 }
 
-export function hasPermission(role: UserRole, permission: string): boolean {
-  const perms = ROLE_PERMISSIONS[role];
-  return perms.includes("*") || perms.includes(permission);
+export function hasPermission(user: AppUser | null | undefined, permission: string): boolean {
+  return userHasPermission(user, permission);
 }

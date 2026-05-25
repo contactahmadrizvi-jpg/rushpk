@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cn, formatDate, parseDate } from "@/lib/utils";
 import { subscribeKitchenOrders, updateOrderStatus } from "@/services/orders.service";
+import { getPendingKitchenOrders } from "@/lib/pos-instant";
 import { playOrderSound } from "@/lib/print";
 import type { Order, KitchenStatus } from "@/types";
 import { RESTAURANT } from "@/constants";
@@ -14,15 +15,41 @@ export default function KitchenPage() {
   const prevCount = useRef(0);
 
   useEffect(() => {
+    let remote: Order[] = [];
+
+    const apply = () => {
+      const pending = getPendingKitchenOrders();
+      const syncedNums = new Set(remote.map((o) => o.dailyOrderNumber));
+      const localOnly = pending.filter((p) => !syncedNums.has(p.dailyOrderNumber));
+      const merged = [...localOnly, ...remote].sort(
+        (a, b) => (a.dailyOrderNumber ?? 0) - (b.dailyOrderNumber ?? 0)
+      );
+      if (merged.length > prevCount.current) playOrderSound();
+      prevCount.current = merged.length;
+      setOrders(merged);
+    };
+
     const unsub = subscribeKitchenOrders((kitchen) => {
-      if (kitchen.length > prevCount.current) playOrderSound();
-      prevCount.current = kitchen.length;
-      setOrders(kitchen);
+      remote = kitchen;
+      apply();
     });
-    return unsub;
+
+    const onPending = () => apply();
+    window.addEventListener("rush-pos-pending", onPending);
+    window.addEventListener("storage", onPending);
+
+    return () => {
+      unsub();
+      window.removeEventListener("rush-pos-pending", onPending);
+      window.removeEventListener("storage", onPending);
+    };
   }, []);
 
   async function setKitchen(id: string, status: KitchenStatus) {
+    if (id.startsWith("local-")) {
+      toast.info("Order is syncing to kitchen — try again in a moment");
+      return;
+    }
     const statusMap: Record<KitchenStatus, Order["status"]> = {
       new: "received",
       preparing: "preparing",

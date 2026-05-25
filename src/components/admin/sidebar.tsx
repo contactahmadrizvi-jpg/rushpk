@@ -13,29 +13,45 @@ import {
   Monitor,
   ChefHat,
   Clock,
+  Shield,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RESTAURANT } from "@/constants";
+import { useAuthStore } from "@/stores/auth-store";
+import { userHasPermission } from "@/lib/permissions";
 
 const nav = [
-  { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
-  { href: "/admin/menu", icon: UtensilsCrossed, label: "Menu" },
-  { href: "/admin/inventory", icon: Package, label: "Inventory" },
-  { href: "/admin/employees", icon: Users, label: "Employees" },
-  { href: "/admin/attendance", icon: Clock, label: "Attendance" },
-  { href: "/admin/reports", icon: BarChart3, label: "Reports" },
-  { href: "/pos", icon: Monitor, label: "POS" },
-  { href: "/kitchen", icon: ChefHat, label: "Kitchen" },
-  { href: "/admin/settings", icon: Settings, label: "Settings" },
+  { href: "/admin", icon: LayoutDashboard, label: "Dashboard", perm: "dashboard" },
+  { href: "/admin/orders", icon: ShoppingBag, label: "Orders", perm: "orders" },
+  { href: "/admin/menu", icon: UtensilsCrossed, label: "Menu", perm: "menu" },
+  { href: "/admin/inventory", icon: Package, label: "Inventory", perm: "inventory" },
+  { href: "/admin/employees", icon: Users, label: "Employees", perm: "employees" },
+  { href: "/admin/roles", icon: Shield, label: "Roles", perm: "roles" },
+  { href: "/admin/attendance", icon: Clock, label: "Attendance", perm: "attendance" },
+  { href: "/admin/reports", icon: BarChart3, label: "Reports", perm: "reports" },
+  { href: "/pos", icon: Monitor, label: "POS", perm: "pos" },
+  { href: "/kitchen", icon: ChefHat, label: "Kitchen", perm: "kitchen" },
+  { href: "/admin/settings", icon: Settings, label: "Settings", perm: "settings" },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const profile = useAuthStore((s) => s.profile);
+
+  const visible = nav.filter((item) => {
+    if (item.perm === "orders") {
+      return (
+        userHasPermission(profile, "orders") ||
+        userHasPermission(profile, "online_orders")
+      );
+    }
+    return userHasPermission(profile, item.perm);
+  });
+
   return (
     <nav className="flex-1 space-y-1 p-4">
-      {nav.map((item) => (
+      {visible.map((item) => (
         <Link
           key={item.href}
           href={item.href}

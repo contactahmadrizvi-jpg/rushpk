@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loginUser, getUserProfile } from "@/services/auth.service";
 import { useAuthStore, isAdminRole } from "@/stores/auth-store";
+import { getStaffHomeRoute } from "@/lib/permissions";
 
 function LoginForm() {
   const router = useRouter();
@@ -25,7 +26,8 @@ function LoginForm() {
   useEffect(() => {
     if (loading) return;
     if (firebaseUser && profile && isAdminRole(profile.role)) {
-      router.replace(redirect.startsWith("/admin") ? redirect : "/admin");
+      const home = getStaffHomeRoute(profile);
+      router.replace(redirect.startsWith("/admin") || redirect === "/pos" ? redirect : home);
     }
   }, [loading, firebaseUser, profile, router, redirect]);
 
@@ -52,7 +54,7 @@ function LoginForm() {
       }
 
       toast.success(`Welcome, ${profile.displayName}!`);
-      router.replace(redirect.startsWith("/admin") ? redirect : "/admin");
+      router.replace(getStaffHomeRoute(profile));
     } catch {
       toast.error("Invalid email or password");
     } finally {

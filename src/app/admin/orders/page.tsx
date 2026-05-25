@@ -5,12 +5,29 @@ import { subscribeOrders } from "@/services/orders.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ORDER_STATUS_LABELS } from "@/constants";
+import { useAuthStore } from "@/stores/auth-store";
+import { canViewOrders, ordersFilterForUser } from "@/lib/permissions";
 import type { Order } from "@/types";
 
 export default function AdminOrdersPage() {
+  const profile = useAuthStore((s) => s.profile);
   const [orders, setOrders] = useState<Order[]>([]);
+  const filter = ordersFilterForUser(profile);
 
-  useEffect(() => subscribeOrders(setOrders), []);
+  useEffect(() => {
+    if (filter === "none") return;
+    return subscribeOrders((list) => {
+      if (filter === "online") {
+        setOrders(list.filter((o) => o.source === "website"));
+      } else {
+        setOrders(list);
+      }
+    });
+  }, [filter]);
+
+  if (!canViewOrders(profile)) {
+    return <p className="text-muted-foreground">No access to orders.</p>;
+  }
 
   return (
     <div>

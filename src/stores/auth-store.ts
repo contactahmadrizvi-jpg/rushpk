@@ -3,6 +3,7 @@ import type { AppUser } from "@/types";
 import { subscribeAuth, getUserProfile, logoutUser } from "@/services/auth.service";
 import type { User } from "firebase/auth";
 import { ADMIN_ROLES } from "@/constants";
+import { userHasPermission } from "@/lib/permissions";
 import type { UserRole } from "@/types";
 
 interface AuthState {
@@ -16,6 +17,7 @@ interface AuthState {
   init: () => () => void;
   logout: () => Promise<void>;
   canAccessAdmin: () => boolean;
+  can: (permission: string) => boolean;
 }
 
 export function isAdminRole(role?: UserRole | string): boolean {
@@ -49,6 +51,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { profile, firebaseUser } = get();
     return !!firebaseUser && isAdminRole(profile?.role);
   },
+
+  can: (permission) => userHasPermission(get().profile, permission),
 
   init: () => {
     if (get().initialized) return () => {};
