@@ -80,6 +80,22 @@ export const STAFF_ROLES: UserRole[] = [
   "employee",
 ];
 
+/** Roles super admin can assign to any registered user */
+export const ASSIGNABLE_ROLES: {
+  value: UserRole;
+  label: string;
+  group: "Management" | "Staff" | "Other";
+  hint: string;
+}[] = [
+  { value: "admin", label: "Admin", group: "Management", hint: "Full access (use permissions to limit)" },
+  { value: "manager", label: "Manager", group: "Management", hint: "Runs restaurant operations" },
+  { value: "cashier", label: "Cashier / POS", group: "Staff", hint: "POS & orders" },
+  { value: "kitchen_staff", label: "Kitchen staff", group: "Staff", hint: "Kitchen display" },
+  { value: "delivery_rider", label: "Delivery rider", group: "Staff", hint: "Delivery orders" },
+  { value: "employee", label: "Employee", group: "Staff", hint: "Attendance only by default" },
+  { value: "customer", label: "Customer (website only)", group: "Other", hint: "No admin/POS access" },
+];
+
 export const ADMIN_ROLES: UserRole[] = [
   "super_admin",
   "admin",

@@ -15,8 +15,17 @@ export function userHasPermission(
   return perms.includes("*") || perms.includes(permission);
 }
 
+export function isSuperAdmin(user: AppUser | null | undefined): boolean {
+  return user?.role === "super_admin";
+}
+
 export function canManageRoles(user: AppUser | null | undefined): boolean {
-  return userHasPermission(user, "*") || userHasPermission(user, "roles");
+  return isSuperAdmin(user) || userHasPermission(user, "roles");
+}
+
+/** Only super admin may grant admin / super_admin roles */
+export function canAssignManagementRoles(user: AppUser | null | undefined): boolean {
+  return isSuperAdmin(user);
 }
 
 export function getStaffHomeRoute(user: AppUser | null | undefined): string {
