@@ -43,7 +43,7 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[85vh] flex-col items-center justify-center gap-6 bg-background">
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-background">
         <motion.div
           animate={{ 
             y: [0, -20, 0],
