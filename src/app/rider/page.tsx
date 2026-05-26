@@ -102,7 +102,7 @@ export default function RiderDashboard() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
   }
 
-  const readyOrders = orders.filter((o) => o.kitchenStatus === "ready" || o.status === "ready");
+  const readyOrders = orders.filter((o) => (o.kitchenStatus === "ready" || o.status === "ready") && o.status !== "out_for_delivery");
   const activeDeliveries = orders.filter((o) => o.status === "out_for_delivery");
   const waitingOrders = orders.filter(
     (o) => o.status !== "out_for_delivery" && o.kitchenStatus !== "ready" && o.status !== "ready"
