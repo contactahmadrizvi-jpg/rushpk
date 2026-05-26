@@ -6,7 +6,7 @@ import { docToData } from "@/lib/firebase/converters";
 import { getFirestoreDb } from "@/lib/firebase/config";
 import { COLLECTIONS, RESTAURANT } from "@/constants";
 import type { Order, OrderItem, Payment, OrderStatus, KitchenStatus } from "@/types";
-import { BaseRepository, orderBy, limit } from "./base.repository";
+import { BaseRepository, orderBy, limit, where } from "./base.repository";
 import { deductInventoryForOrder, checkStockForOrderItems } from "./inventory.service";
 import { getNextDailyOrderNumber } from "./order-sequence.service";
 
