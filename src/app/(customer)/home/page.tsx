@@ -142,12 +142,22 @@ export default function HomePage() {
       )}
 
       {loading ? (
-        <section className="mx-auto max-w-7xl px-4 pb-16">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="aspect-[4/5] w-full" />
-            ))}
-          </div>
+        <section className="flex min-h-[40vh] flex-col items-center justify-center gap-6 py-16">
+          <motion.div
+            animate={{ 
+              y: [0, -20, 0],
+              rotate: [0, 5, -5, 0]
+            }}
+            transition={{ 
+              duration: 1.2, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+            className="text-7xl drop-shadow-xl"
+          >
+            🍔
+          </motion.div>
+          <p className="animate-pulse text-xl font-bold tracking-tight text-primary">Serving up deliciousness...</p>
         </section>
       ) : homeSections.length === 0 ? (
         <section className="mx-auto max-w-7xl px-4 pb-16">

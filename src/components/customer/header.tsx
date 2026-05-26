@@ -17,8 +17,6 @@ const links = [
   { href: "/home", label: "Home" },
   { href: "/menu", label: "Menu" },
   { href: "/deals", label: "Deals" },
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
 ];
 
 export function CustomerHeader() {
