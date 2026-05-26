@@ -41,6 +41,28 @@ export default function HomePage() {
     return cat && catItems.length > 0 ? { cat, items: catItems } : null;
   }).filter(Boolean) as { cat: MenuCategory; items: MenuItem[] }[];
 
+  if (loading) {
+    return (
+      <div className="flex min-h-[85vh] flex-col items-center justify-center gap-6 bg-background">
+        <motion.div
+          animate={{ 
+            y: [0, -20, 0],
+            rotate: [0, 5, -5, 0]
+          }}
+          transition={{ 
+            duration: 1.2, 
+            repeat: Infinity, 
+            ease: "easeInOut" 
+          }}
+          className="text-7xl drop-shadow-xl"
+        >
+          🍔
+        </motion.div>
+        <p className="animate-pulse text-xl font-bold tracking-tight text-primary">Serving up deliciousness...</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <section className="relative min-h-[min(85vh,720px)] overflow-hidden">
@@ -141,25 +163,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {loading ? (
-        <section className="flex min-h-[40vh] flex-col items-center justify-center gap-6 py-16">
-          <motion.div
-            animate={{ 
-              y: [0, -20, 0],
-              rotate: [0, 5, -5, 0]
-            }}
-            transition={{ 
-              duration: 1.2, 
-              repeat: Infinity, 
-              ease: "easeInOut" 
-            }}
-            className="text-7xl drop-shadow-xl"
-          >
-            🍔
-          </motion.div>
-          <p className="animate-pulse text-xl font-bold tracking-tight text-primary">Serving up deliciousness...</p>
-        </section>
-      ) : homeSections.length === 0 ? (
+      {homeSections.length === 0 ? (
         <section className="mx-auto max-w-7xl px-4 pb-16">
           <p className="text-muted-foreground">Our menu is being updated. Check back soon.</p>
         </section>
