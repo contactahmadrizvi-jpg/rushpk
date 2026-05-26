@@ -427,23 +427,23 @@ export default function POSPage() {
                   addItem(item);
                   if (window.innerWidth < 768) setShowCartMobile(true);
                 }}
-                className="group overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40 active:scale-[0.98]"
+                className="group flex flex-col h-52 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40 active:scale-[0.98]"
               >
-                <div className="relative aspect-[4/3] overflow-hidden bg-stone-100">
+                <div className="relative flex-1 w-full overflow-hidden bg-stone-100">
                   <MenuItemImage src={item.imageUrl} alt={item.name} fill />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-80" />
-                  <span className="absolute bottom-2 left-2 right-2 truncate text-sm font-bold text-white drop-shadow">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent opacity-80" />
+                  <span className="absolute bottom-2.5 left-3 right-3 truncate text-sm font-extrabold text-white drop-shadow-sm">
                     {item.name}
                   </span>
-                  <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
-                    <Plus className="h-5 w-5" />
+                  <span className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
+                    <Plus className="h-4 w-4" />
                   </span>
                 </div>
-                <div className="flex items-center justify-between p-3">
-                  <span className="text-lg font-black text-primary">
+                <div className="flex items-center justify-between px-3 py-2.5 shrink-0 h-12 bg-white">
+                  <span className="text-base font-black text-primary">
                     {formatCurrency(item.price)}
                   </span>
-                  <span className="rounded-lg bg-orange-50 px-2 py-1 text-xs font-bold text-orange-700">
+                  <span className="rounded-lg bg-orange-55 px-2 py-0.5 text-xs font-bold text-orange-700 bg-orange-50">
                     + Add
                   </span>
                 </div>
