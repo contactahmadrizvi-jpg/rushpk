@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 export default function RiderDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const user = useAuthStore((s) => s.user);
+  const profile = useAuthStore((s) => s.profile);
   const router = useRouter();
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function RiderDashboard() {
 
   async function handleLogout() {
     await logoutUser();
-    useAuthStore.getState().setUser(null);
+    useAuthStore.getState().setProfile(null);
     router.push("/login");
   }
 
@@ -57,7 +57,7 @@ export default function RiderDashboard() {
       <header className="bg-primary px-4 py-4 text-primary-foreground shadow-md sticky top-0 z-10 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Rider Dashboard</h1>
-          <p className="text-xs opacity-90">Welcome, {user?.name || "Rider"}</p>
+          <p className="text-xs opacity-90">Welcome, {profile?.name || "Rider"}</p>
         </div>
         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={handleLogout}>
           <LogOut className="h-5 w-5" />
