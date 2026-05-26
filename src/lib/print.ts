@@ -45,7 +45,7 @@ async function resolvePrintHeader(): Promise<PrintHeader> {
     if (settings) {
       return {
         name: (settings.printerSettings?.restaurantName ?? settings.name).toUpperCase(),
-        location: `${settings.address}, ${settings.city}`.toUpperCase(),
+        location: RESTAURANT.location.toUpperCase(),
         phone: settings.phone,
         email: settings.email,
         logoUrl: settings.logoUrl,
