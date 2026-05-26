@@ -1,6 +1,6 @@
 import { RESTAURANT } from "@/constants";
 import type { CreateOrderInput } from "@/services/orders.service";
-import type { Order } from "@/types";
+import type { Order, KitchenStatus } from "@/types";
 
 const PENDING_KEY = "rush_pos_pending_orders";
 const DAILY_KEY_PREFIX = "rush_pos_daily_";
@@ -95,6 +95,24 @@ export function getPendingKitchenOrders(): Order[] {
 
 export function removePendingByLocalId(localId: string) {
   writePending(readPending().filter((p) => p.localId !== localId));
+}
+
+export function updatePendingOrderStatus(localId: string, status: Order["status"], kitchenStatus: KitchenStatus) {
+  const list = readPending();
+  let updated = false;
+  for (const p of list) {
+    if (p.localId === localId) {
+      p.order.status = status;
+      p.order.kitchenStatus = kitchenStatus;
+      p.input.status = status;
+      p.input.kitchenStatus = kitchenStatus;
+      updated = true;
+    }
+  }
+  if (updated) {
+    writePending(list);
+    window.dispatchEvent(new Event("rush-pos-pending"));
+  }
 }
 
 export function markPendingFailed(localId: string) {

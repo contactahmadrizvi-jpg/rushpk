@@ -19,6 +19,8 @@ export interface CreateOrderInput {
   customerEmail?: string;
   userId?: string;
   type: Order["type"];
+  status?: Order["status"];
+  kitchenStatus?: KitchenStatus;
   items: OrderItem[];
   subtotal: number;
   tax: number;
@@ -53,8 +55,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     type: input.type,
-    status: "received",
-    kitchenStatus: "new",
+    status: input.status ?? "received",
+    kitchenStatus: input.kitchenStatus ?? "new",
     items: input.items,
     subtotal: input.subtotal,
     tax: input.tax,

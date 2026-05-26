@@ -50,16 +50,21 @@ export default function KitchenPage() {
   }, []);
 
   async function setKitchen(id: string, status: KitchenStatus) {
-    if (id.startsWith("local-")) {
-      toast.info("Order is syncing to kitchen — try again in a moment");
-      return;
-    }
     const statusMap: Record<KitchenStatus, Order["status"]> = {
       new: "received",
       preparing: "preparing",
       ready: "ready",
       served: "served",
     };
+
+    if (id.startsWith("local-")) {
+      import("@/lib/pos-instant").then((m) => {
+        m.updatePendingOrderStatus(id, statusMap[status], status);
+      });
+      toast.success(`Order marked ${status}`);
+      return;
+    }
+    
     await updateOrderStatus(id, statusMap[status], status);
     toast.success(`Order marked ${status}`);
   }
