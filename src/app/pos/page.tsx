@@ -82,10 +82,6 @@ export default function POSPage() {
       router.replace("/admin");
       return;
     }
-    const state = usePOSStore.getState();
-    if (!state.customerName) {
-      setCustomer("Walk-in", state.customerPhone || "03001234567");
-    }
     preloadPrintHeader();
     const stopSync = startPosSyncWorker();
     getActiveCategories().then(setCategories);
@@ -158,7 +154,6 @@ export default function POSPage() {
     clearOrder();
     setPaying(false);
     setShowCartMobile(false);
-    setCustomer("Walk-in", customerPhone);
     toast.success(`Order #${num} — printing`);
     requestAnimationFrame(() => void printPosDocuments(order));
   }, [
