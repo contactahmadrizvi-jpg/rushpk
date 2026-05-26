@@ -4,12 +4,21 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MenuItemImage } from "@/components/menu-item-image";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Search, Trash2, Banknote, X, Plus } from "lucide-react";
+import {
+  Search,
+  Trash2,
+  ShoppingBag,
+  User,
+  Phone,
+  Utensils,
+  ArrowLeft,
+  Minus,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { usePOSStore } from "@/stores/pos-store";
 import { subscribeMenuItems, getActiveCategories } from "@/services/menu.service";
 import type { CreateOrderInput } from "@/services/orders.service";
@@ -22,10 +31,10 @@ import { useAuthStore } from "@/stores/auth-store";
 import { userHasPermission } from "@/lib/permissions";
 import { RESTAURANT } from "@/constants";
 
-const CATEGORY_SHORT: Record<string, string> = {
+const CATEGORY_LABEL: Record<string, string> = {
   "cat-shawarma": "Shawarma",
   "cat-wraps": "Wraps",
-  "cat-beef-burger": "Beef",
+  "cat-beef-burger": "Burgers",
   "cat-chicken-burger": "Chicken",
   "cat-paratha": "Paratha",
   "cat-sides": "Sides",
@@ -33,14 +42,21 @@ const CATEGORY_SHORT: Record<string, string> = {
   "cat-premium-pizza": "Premium",
 };
 
+const ORDER_TYPES: { id: OrderType; label: string; icon: string }[] = [
+  { id: "dine_in", label: "Dine in", icon: "🍽️" },
+  { id: "takeaway", label: "Takeaway", icon: "🥡" },
+  { id: "delivery", label: "Delivery", icon: "🛵" },
+];
+
 export default function POSPage() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string>("");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [paying, setPaying] = useState(false);
+  const [showCartMobile, setShowCartMobile] = useState(false);
 
   const {
     items,
@@ -64,22 +80,25 @@ export default function POSPage() {
       router.replace("/admin");
       return;
     }
+    const state = usePOSStore.getState();
+    if (!state.customerName) {
+      setCustomer("Walk-in", state.customerPhone || "03001234567");
+    }
     preloadPrintHeader();
     const stopSync = startPosSyncWorker();
-    getActiveCategories().then((cats) => {
-      setCategories(cats);
-      setActiveCategory((prev) => prev || cats[0]?.id || "");
-    });
+    getActiveCategories().then(setCategories);
     const unsub = subscribeMenuItems(setMenu);
     return () => {
       unsub();
       stopSync();
     };
-  }, [profile, router]);
+  }, [profile, router, setCustomer]);
 
   const filtered = useMemo(() => {
     let list = menu;
-    if (activeCategory) list = list.filter((m) => m.categoryId === activeCategory);
+    if (activeCategory !== "all") {
+      list = list.filter((m) => m.categoryId === activeCategory);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((m) => m.name.toLowerCase().includes(q));
@@ -94,16 +113,15 @@ export default function POSPage() {
   const placeOrder = useCallback(() => {
     if (paying) return;
     if (!customerName.trim() || !customerPhone.trim()) {
-      toast.error("Enter customer name and phone");
+      toast.error("Add customer name & phone");
       return;
     }
     if (!items.length) {
-      toast.error("Add items to cart");
+      toast.error("Tap items to add to cart");
       return;
     }
 
     setPaying(true);
-
     const orderItems: OrderItem[] = items.map((line, i) => ({
       id: `pos-${i}`,
       menuItemId: line.menuItem.id,
@@ -132,14 +150,12 @@ export default function POSPage() {
 
     const { order } = buildInstantPosOrder(input);
     const num = order.dailyOrderNumber ?? order.orderNumber;
-
     clearOrder();
     setPaying(false);
-    toast.success(`Order #${num}`);
-
-    requestAnimationFrame(() => {
-      void printPosDocuments(order);
-    });
+    setShowCartMobile(false);
+    setCustomer("Walk-in", customerPhone);
+    toast.success(`Order #${num} — printing`);
+    requestAnimationFrame(() => void printPosDocuments(order));
   }, [
     paying,
     items,
@@ -152,6 +168,7 @@ export default function POSPage() {
     tableNumber,
     profile,
     clearOrder,
+    setCustomer,
   ]);
 
   useEffect(() => {
@@ -165,32 +182,202 @@ export default function POSPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [placeOrder]);
 
-  return (
-    <div className="flex h-screen flex-col bg-neutral-100">
-      <header className="shrink-0 border-b bg-white px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <Link href="/admin" className="text-xs text-neutral-500">
-            ← Back
-          </Link>
-          <span className="font-bold">{RESTAURANT.name}</span>
-          <Badge>{cartCount}</Badge>
+  const cartPanel = (
+    <div className="flex h-full flex-col bg-white">
+      {/* Customer — compact */}
+      <div className="border-b bg-gradient-to-br from-orange-50 to-white p-4">
+        <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
+          <User className="h-3.5 w-3.5" /> Customer
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Input
+              className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+              placeholder="Name"
+              value={customerName}
+              onChange={(e) => setCustomer(e.target.value, customerPhone)}
+            />
+          </div>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Input
+              className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+              placeholder="Phone"
+              value={customerPhone}
+              onChange={(e) => setCustomer(customerName, e.target.value)}
+            />
+          </div>
         </div>
-        <div className="mt-2 flex gap-1">
-          {(["dine_in", "takeaway", "delivery"] as OrderType[]).map((t) => (
+        {orderType === "dine_in" && (
+          <div className="relative mt-2">
+            <Utensils className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Input
+              type="number"
+              className="h-11 rounded-xl border-stone-200 bg-white pl-9"
+              placeholder="Table no."
+              value={tableNumber ?? ""}
+              onChange={(e) =>
+                setTableNumber(e.target.value ? Number(e.target.value) : undefined)
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Cart list */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {items.length === 0 ? (
+          <div className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/80 p-6 text-center">
+            <ShoppingBag className="h-10 w-10 text-stone-300" />
+            <p className="mt-3 font-medium text-stone-500">Cart is empty</p>
+            <p className="mt-1 text-sm text-stone-400">Tap a product to add</p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {items.map((line) => (
+              <li
+                key={line.id}
+                className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50/80 p-3 shadow-sm"
+              >
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+                  <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-stone-900">{line.menuItem.name}</p>
+                  <p className="text-sm font-semibold text-primary">
+                    {formatCurrency(line.subtotal)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 rounded-xl bg-white p-0.5 shadow-sm">
+                  <button
+                    type="button"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-100 text-lg font-bold active:scale-95"
+                    onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="w-8 text-center text-lg font-black">{line.quantity}</span>
+                  <button
+                    type="button"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white active:scale-95"
+                    onClick={() => updateQty(line.id, line.quantity + 1)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg p-2 text-red-500 hover:bg-red-50"
+                  onClick={() => removeItem(line.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Pay bar */}
+      <div className="border-t bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+        <div className="mb-3 flex items-end justify-between">
+          <span className="text-sm font-medium text-stone-500">Total</span>
+          <span className="text-3xl font-black tracking-tight text-primary">
+            {formatCurrency(total)}
+          </span>
+        </div>
+        <Button
+          size="lg"
+          disabled={paying || !items.length}
+          className="h-14 w-full rounded-2xl text-lg font-bold shadow-lg shadow-primary/25"
+          onClick={placeOrder}
+        >
+          {paying ? "Processing..." : `Pay & Print · F2`}
+        </Button>
+        {items.length > 0 && (
+          <button
+            type="button"
+            className="mt-2 w-full text-center text-sm text-stone-400 hover:text-red-500"
+            onClick={clearOrder}
+          >
+            Clear cart
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f8f4ef]">
+      {/* Top bar */}
+      <header className="shrink-0 border-b border-stone-200/80 bg-white/90 px-3 py-3 backdrop-blur-md sm:px-5">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 text-stone-600 transition hover:bg-stone-200"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-black text-stone-900 sm:text-xl">
+              {RESTAURANT.name}
+            </h1>
+            <p className="flex items-center gap-1 text-xs text-stone-500">
+              <Sparkles className="h-3 w-3 text-primary" /> Point of Sale
+            </p>
+          </div>
+          <button
+            type="button"
+            className="relative flex h-12 items-center gap-2 rounded-2xl bg-primary px-4 font-bold text-white shadow-md md:hidden"
+            onClick={() => setShowCartMobile(true)}
+          >
+            <ShoppingBag className="h-5 w-5" />
+            {cartCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-stone-900 text-xs">
+                {cartCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Order type */}
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {ORDER_TYPES.map((t) => (
             <button
-              key={t}
+              key={t.id}
               type="button"
-              onClick={() => setOrderType(t)}
+              onClick={() => setOrderType(t.id)}
               className={cn(
-                "flex-1 rounded-lg py-2 text-xs font-bold",
-                orderType === t ? "bg-primary text-white" : "bg-neutral-100"
+                "rounded-xl py-2.5 text-sm font-bold transition-all",
+                orderType === t.id
+                  ? "bg-primary text-white shadow-md shadow-primary/30"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
               )}
             >
-              {t === "dine_in" ? "Dine in" : t === "takeaway" ? "Takeaway" : "Delivery"}
+              <span className="mr-1">{t.icon}</span>
+              {t.label}
             </button>
           ))}
         </div>
-        <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+
+        {/* Categories */}
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCategory("all");
+              setSearch("");
+            }}
+            className={cn(
+              "shrink-0 rounded-full px-4 py-2 text-sm font-bold transition",
+              activeCategory === "all"
+                ? "bg-stone-900 text-white"
+                : "bg-white text-stone-600 ring-1 ring-stone-200"
+            )}
+          >
+            All
+          </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -200,152 +387,93 @@ export default function POSPage() {
                 setSearch("");
               }}
               className={cn(
-                "shrink-0 rounded-lg px-3 py-2 text-xs font-bold",
-                activeCategory === cat.id ? "bg-primary text-white" : "bg-neutral-100"
+                "shrink-0 rounded-full px-4 py-2 text-sm font-bold transition",
+                activeCategory === cat.id
+                  ? "bg-primary text-white shadow-md"
+                  : "bg-white text-stone-600 ring-1 ring-stone-200"
               )}
             >
-              {CATEGORY_SHORT[cat.id] ?? cat.name}
+              {CATEGORY_LABEL[cat.id] ?? cat.name}
             </button>
           ))}
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <section className="flex min-h-0 flex-1 flex-col bg-white md:min-w-0">
-          <div className="border-b p-2">
-            <Label htmlFor="pos-search" className="text-xs">
-              Search items
-            </Label>
-            <div className="relative mt-1">
-              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+      <div className="flex min-h-0 flex-1">
+        {/* Menu */}
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="p-3 sm:p-4">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400" />
               <Input
-                id="pos-search"
-                className="h-9 pl-8"
+                className="h-12 rounded-2xl border-0 bg-white pl-12 text-base shadow-sm ring-1 ring-stone-200/80"
+                placeholder="Search menu..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="grid flex-1 grid-cols-2 gap-2 overflow-y-auto p-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto px-3 pb-24 sm:grid-cols-3 sm:px-4 sm:pb-4 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => addItem(item)}
-                className="rounded-xl border p-2 text-left active:bg-primary/5"
+                onClick={() => {
+                  addItem(item);
+                  if (window.innerWidth < 768) setShowCartMobile(true);
+                }}
+                className="group overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40 active:scale-[0.98]"
               >
-                <div className="relative aspect-square overflow-hidden rounded-lg bg-neutral-100">
+                <div className="relative aspect-[4/3] overflow-hidden bg-stone-100">
                   <MenuItemImage src={item.imageUrl} alt={item.name} fill />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-80" />
+                  <span className="absolute bottom-2 left-2 right-2 truncate text-sm font-bold text-white drop-shadow">
+                    {item.name}
+                  </span>
+                  <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
+                    <Plus className="h-5 w-5" />
+                  </span>
                 </div>
-                <p className="mt-2 line-clamp-2 text-xs font-bold">{item.name}</p>
-                <p className="text-sm font-black text-primary">{formatCurrency(item.price)}</p>
+                <div className="flex items-center justify-between p-3">
+                  <span className="text-lg font-black text-primary">
+                    {formatCurrency(item.price)}
+                  </span>
+                  <span className="rounded-lg bg-orange-50 px-2 py-1 text-xs font-bold text-orange-700">
+                    + Add
+                  </span>
+                </div>
               </button>
             ))}
-          </div>
-        </section>
-
-        <aside className="flex max-h-[45vh] flex-col border-t bg-white md:max-h-none md:w-80 md:shrink-0 md:border-l md:border-t-0">
-          <div className="space-y-2 border-b p-3">
-            <button
-              type="button"
-              className="w-full rounded-lg bg-neutral-100 py-1.5 text-xs font-semibold"
-              onClick={() => setCustomer("Walk-in", customerPhone || "03001234567")}
-            >
-              Walk-in
-            </button>
-            <div>
-              <Label htmlFor="cust-name">Customer name</Label>
-              <Input
-                id="cust-name"
-                className="mt-1 h-10"
-                value={customerName}
-                onChange={(e) => setCustomer(e.target.value, customerPhone)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="cust-phone">Phone number</Label>
-              <Input
-                id="cust-phone"
-                className="mt-1 h-10"
-                value={customerPhone}
-                onChange={(e) => setCustomer(customerName, e.target.value)}
-              />
-            </div>
-            {orderType === "dine_in" && (
-              <div>
-                <Label htmlFor="table-num">Table number</Label>
-                <Input
-                  id="table-num"
-                  type="number"
-                  className="mt-1 h-10"
-                  value={tableNumber ?? ""}
-                  onChange={(e) =>
-                    setTableNumber(e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-              </div>
+            {!filtered.length && (
+              <p className="col-span-full py-16 text-center text-stone-400">No items found</p>
             )}
           </div>
+        </main>
 
-          <div className="flex-1 overflow-y-auto">
-            {items.length === 0 ? (
-              <p className="p-6 text-center text-sm text-neutral-400">Tap items to add</p>
-            ) : (
-              <ul className="divide-y">
-                {items.map((line) => (
-                  <li key={line.id} className="flex items-center gap-2 px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold">{line.menuItem.name}</p>
-                      <p className="text-xs text-neutral-500">
-                        {line.quantity} × {formatCurrency(line.unitPrice)}
-                      </p>
-                    </div>
-                    <div className="flex rounded border text-sm font-bold">
-                      <button
-                        type="button"
-                        className="px-2 py-1"
-                        onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
-                      >
-                        −
-                      </button>
-                      <span className="px-2 py-1">{line.quantity}</span>
-                      <button
-                        type="button"
-                        className="px-2 py-1"
-                        onClick={() => updateQty(line.id, line.quantity + 1)}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <button type="button" onClick={() => removeItem(line.id)} className="text-red-500">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="border-t p-3">
-            <div className="flex justify-between text-lg font-bold">
-              <span>Total</span>
-              <span className="text-primary">{formatCurrency(total)}</span>
-            </div>
-            <Button
-              className="mt-2 h-12 w-full text-base font-bold"
-              disabled={paying}
-              onClick={placeOrder}
-            >
-              <Banknote className="mr-2 h-5 w-5" />
-              {paying ? "..." : "Pay & print (F2)"}
-            </Button>
-            <Button variant="ghost" size="sm" className="mt-1 w-full" onClick={clearOrder}>
-              <X className="mr-1 h-4 w-4" /> Clear cart
-            </Button>
-          </div>
+        {/* Cart — desktop */}
+        <aside className="hidden w-[min(100%,400px)] shrink-0 border-l border-stone-200/80 shadow-xl md:flex md:flex-col">
+          {cartPanel}
         </aside>
       </div>
+
+      {/* Cart — mobile sheet */}
+      {showCartMobile && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            aria-label="Close cart"
+            onClick={() => setShowCartMobile(false)}
+          />
+          <div className="absolute bottom-0 left-0 right-0 flex max-h-[88vh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl">
+            <div className="flex justify-center py-3">
+              <div className="h-1 w-12 rounded-full bg-stone-200" />
+            </div>
+            <div className="min-h-0 flex-1">{cartPanel}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
