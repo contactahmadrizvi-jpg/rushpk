@@ -77,10 +77,79 @@ export default function AdminInventoryPage() {
     load();
   }
 
+  const ITEMS_TO_SEED = [
+    { name: "Shawarma Bread", unit: "piece", stock: 200 },
+    { name: "Wrap Bread", unit: "piece", stock: 120 },
+    { name: "Burger Bun", unit: "piece", stock: 100 },
+    { name: "Paratha", unit: "piece", stock: 150 },
+    { name: "Pizza Dough Small", unit: "gram", stock: 6000 },
+    { name: "Pizza Dough Medium", unit: "gram", stock: 10000 },
+    { name: "Pizza Dough Large", unit: "gram", stock: 13500 },
+    { name: "Pizza Dough Family", unit: "gram", stock: 13000 },
+    { name: "Boneless Chicken", unit: "gram", stock: 35000 },
+    { name: "Beef", unit: "gram", stock: 20000 },
+    { name: "Cheese", unit: "gram", stock: 15000 },
+    { name: "Cheese Slice", unit: "slice", stock: 200 },
+    { name: "Zinger Piece", unit: "piece", stock: 120 },
+    { name: "Kabab", unit: "piece", stock: 150 },
+    { name: "Fries", unit: "gram", stock: 40000 },
+    { name: "Wings", unit: "piece", stock: 200 },
+    { name: "Nuggets", unit: "piece", stock: 200 },
+    { name: "Mayo Sauce", unit: "gram", stock: 8000 },
+    { name: "Garlic Mayo", unit: "gram", stock: 6000 },
+    { name: "Pizza Sauce", unit: "gram", stock: 10000 },
+    { name: "Jalapenos", unit: "gram", stock: 3000 },
+    { name: "Onion", unit: "gram", stock: 15000 },
+    { name: "Lettuce / Cabbage", unit: "gram", stock: 12000 },
+    { name: "Cooking Oil", unit: "liter", stock: 50 },
+    { name: "Pizza Boxes Small", unit: "piece", stock: 50 },
+    { name: "Pizza Boxes Medium", unit: "piece", stock: 50 },
+    { name: "Pizza Boxes Large", unit: "piece", stock: 40 },
+    { name: "Pizza Boxes Family", unit: "piece", stock: 30 },
+    { name: "Burger Wrappers", unit: "piece", stock: 300 },
+    { name: "Delivery Bags", unit: "piece", stock: 200 },
+  ];
+
+  async function bulkSeed() {
+    setLoading(true);
+    let added = 0;
+    try {
+      for (const item of ITEMS_TO_SEED) {
+        if (items.some(i => i.name.toLowerCase() === item.name.toLowerCase())) {
+           continue;
+        }
+        const now = new Date().toISOString();
+        await inventoryRepo.create({
+          name: item.name,
+          sku: item.name.replace(/\s+/g, "-").toUpperCase(),
+          unit: item.unit as InventoryUnit,
+          currentStock: item.stock,
+          minStock: 10,
+          costPerUnit: 0,
+          isActive: true,
+          preventSellWhenLow: false,
+          createdAt: now,
+          updatedAt: now,
+        } as Omit<InventoryItem, "id">);
+        added++;
+      }
+      toast.success(`Successfully added ${added} items!`);
+      load();
+    } catch (err) {
+      toast.error("Failed to seed items");
+      setLoading(false);
+    }
+  }
+
   return (
     <div>
-      <h1 className="text-2xl font-bold">Inventory</h1>
-      <p className="text-muted-foreground">Edit stock, units & limits. Auto-deducts on orders.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Inventory</h1>
+          <p className="text-muted-foreground">Edit stock, units & limits. Auto-deducts on orders.</p>
+        </div>
+        <Button onClick={bulkSeed} variant="outline">Bulk Import Items</Button>
+      </div>
 
       <Card className="mt-6">
         <CardHeader>
