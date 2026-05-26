@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuthStore } from "@/stores/auth-store";
+import { userHasPermission } from "@/lib/permissions";
+import RiderDashboard from "@/components/admin/RiderDashboard";
 import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +33,8 @@ export default function AdminDashboardPage() {
 
   if (loading) return <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
 
+
+
   const cards = [
     { label: "Today Revenue", value: formatCurrency(stats?.todayRevenue ?? 0), icon: DollarSign },
     { label: "Today Orders", value: String(stats?.todayOrders ?? 0), icon: ShoppingBag },
@@ -41,6 +46,9 @@ export default function AdminDashboardPage() {
     { name: "Cash", value: stats?.cashPayments ?? 0 },
     { name: "Online", value: stats?.onlinePayments ?? 0 },
   ];
+
+  const profile = useAuthStore((s) => s.profile);
+  const showRider = profile && (profile.role === "delivery_rider" || userHasPermission(profile, "delivery"));
 
   return (
     <div>
@@ -85,6 +93,11 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+      {showRider && (
+        <section className="mt-12">
+          <RiderDashboard />
+        </section>
+      )}
     </div>
   );
 }
