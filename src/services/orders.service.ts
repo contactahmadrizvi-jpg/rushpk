@@ -110,14 +110,17 @@ export async function updateOrderStatus(
 
 export function subscribeOrders(
   callback: (orders: Order[]) => void,
-  statusFilter?: OrderStatus[]
+  startIso?: string,
+  endIso?: string
 ): () => void {
-  return ordersRepo.subscribe([orderBy("createdAt", "desc"), limit(100)], (orders) => {
-    if (statusFilter?.length) {
-      callback(orders.filter((o) => statusFilter.includes(o.status)));
-    } else {
-      callback(orders);
-    }
+  const constraints: any[] = [];
+  if (startIso) constraints.push(where("createdAt", ">=", startIso));
+  if (endIso) constraints.push(where("createdAt", "<=", endIso));
+  constraints.push(orderBy("createdAt", "desc"));
+  constraints.push(limit(500));
+
+  return ordersRepo.subscribe(constraints, (orders) => {
+    callback(orders);
   });
 }
 

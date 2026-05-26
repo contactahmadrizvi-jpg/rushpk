@@ -16,12 +16,22 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const filter = ordersFilterForUser(profile);
 
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+
   useEffect(() => {
     if (filter === "none") {
       setLoading(false);
       return;
     }
     setLoading(true);
+
+    const start = new Date(`${selectedDate}T00:00:00`);
+    const end = new Date(`${selectedDate}T23:59:59.999`);
+
     return subscribeOrders((list) => {
       if (filter === "online") {
         setOrders(list.filter((o) => o.source === "website"));
@@ -29,8 +39,8 @@ export default function AdminOrdersPage() {
         setOrders(list);
       }
       setLoading(false);
-    });
-  }, [filter]);
+    }, start.toISOString(), end.toISOString());
+  }, [filter, selectedDate]);
 
   if (!canViewOrders(profile)) {
     return <p className="text-muted-foreground">No access to orders.</p>;
@@ -39,7 +49,15 @@ export default function AdminOrdersPage() {
   if (loading) {
     return (
       <div>
-        <h1 className="text-2xl font-bold">Orders</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Orders</h1>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="rounded-md border bg-background px-3 py-1.5 text-sm"
+          />
+        </div>
         <div className="mt-6">
           <OrderListSkeleton count={5} />
         </div>
@@ -49,8 +67,18 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Orders</h1>
-      <p className="text-sm text-muted-foreground">{orders.length} total</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Orders</h1>
+          <p className="text-sm text-muted-foreground">{orders.length} total</p>
+        </div>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="rounded-md border bg-background px-3 py-1.5 text-sm"
+        />
+      </div>
       <div className="mt-6 space-y-4">
         {orders.map((o) => (
           <div key={o.id} className="rounded-xl border bg-card p-4">
