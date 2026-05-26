@@ -2,7 +2,7 @@ import type { UserRole } from "@/types";
 
 export const RESTAURANT = {
   name: "Rush Pizza and Burger",
-  location: "Sheikhupura, Pakistan",
+  location: "Rush Pizza-Burger, Lahore Rd, opposite Usman CNG, near Makhan Sweets, Jameel Town, Sheikhupura, Pakistan",
   phone: "+92 300 0000000",
   email: "orders@rushpizza.pk",
   defaultBranchId: "branch-sheikhupura",
