@@ -108,6 +108,46 @@ export async function checkInQR(
   } as Omit<AttendanceRecord, "id">);
 }
 
+export async function checkInSelfie(
+  employeeId: string,
+  employeeName: string,
+  selfieUrl: string,
+  shiftStart: string
+): Promise<string> {
+  const today = new Date().toISOString().split("T")[0]!;
+  const now = new Date().toISOString();
+  const isLate = new Date(now) > new Date(`${today}T${shiftStart}`);
+
+  const existing = await attendanceRepo.getAll([
+    where("employeeId", "==", employeeId),
+    where("date", "==", today),
+  ]);
+
+  if (existing.length && existing[0]?.checkIn) {
+    throw new Error("Already checked in today");
+  }
+
+  if (existing.length) {
+    await attendanceRepo.update(existing[0]!.id, {
+      checkIn: now,
+      checkInMethod: "selfie",
+      selfieUrl,
+      isLate,
+    } as Partial<AttendanceRecord>);
+    return existing[0]!.id;
+  }
+
+  return attendanceRepo.create({
+    employeeId,
+    employeeName,
+    date: today,
+    checkIn: now,
+    checkInMethod: "selfie",
+    selfieUrl,
+    isLate,
+  } as Omit<AttendanceRecord, "id">);
+}
+
 export async function checkOut(employeeId: string): Promise<void> {
   const today = new Date().toISOString().split("T")[0]!;
   const records = await attendanceRepo.getAll([

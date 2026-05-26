@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InventoryEditDialog } from "@/components/admin/inventory-edit-dialog";
@@ -85,39 +86,54 @@ export default function AdminInventoryPage() {
         <CardHeader>
           <CardTitle>Add raw material</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Input
-            placeholder="Name"
-            className="max-w-xs"
-            value={newItem.name}
-            onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-          />
-          <select
-            className="h-11 rounded-xl border px-3 text-sm"
-            value={newItem.unit}
-            onChange={(e) => setNewItem({ ...newItem, unit: e.target.value as InventoryUnit })}
-          >
-            <option value="piece">piece</option>
-            <option value="gram">gram</option>
-            <option value="kg">kg</option>
-            <option value="slice">slice</option>
-            <option value="liter">liter</option>
-          </select>
-          <Input
-            placeholder="Stock"
-            type="number"
-            className="w-24"
-            value={newItem.stock}
-            onChange={(e) => setNewItem({ ...newItem, stock: e.target.value })}
-          />
-          <Input
-            placeholder="Min"
-            type="number"
-            className="w-24"
-            value={newItem.minStock}
-            onChange={(e) => setNewItem({ ...newItem, minStock: e.target.value })}
-          />
-          <Button onClick={addInventory}>Add</Button>
+        <CardContent className="flex flex-wrap gap-4 items-end">
+          <div className="space-y-1.5 flex-1 min-w-[200px]">
+            <Label htmlFor="item-name">Item Name</Label>
+            <Input
+              id="item-name"
+              placeholder="e.g. Cheese, Tomato Sauce"
+              value={newItem.name}
+              onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="item-unit">Unit Type</Label>
+            <select
+              id="item-unit"
+              className="h-11 w-28 rounded-xl border bg-background px-3 text-sm"
+              value={newItem.unit}
+              onChange={(e) => setNewItem({ ...newItem, unit: e.target.value as InventoryUnit })}
+            >
+              <option value="piece">piece</option>
+              <option value="gram">gram</option>
+              <option value="kg">kg</option>
+              <option value="slice">slice</option>
+              <option value="liter">liter</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="item-stock">Initial Stock</Label>
+            <Input
+              id="item-stock"
+              placeholder="Stock"
+              type="number"
+              className="w-24"
+              value={newItem.stock}
+              onChange={(e) => setNewItem({ ...newItem, stock: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="item-min">Min Alert Stock</Label>
+            <Input
+              id="item-min"
+              placeholder="Min"
+              type="number"
+              className="w-24"
+              value={newItem.minStock}
+              onChange={(e) => setNewItem({ ...newItem, minStock: e.target.value })}
+            />
+          </div>
+          <Button onClick={addInventory} className="h-11 px-6 rounded-xl">Add Item</Button>
         </CardContent>
       </Card>
 

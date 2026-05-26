@@ -62,8 +62,8 @@ export function TableRowsSkeleton({ rows = 6 }: { rows?: number }) {
 export function KitchenColumnsSkeleton() {
   return (
     <div className="grid flex-1 gap-4 p-4 md:grid-cols-3">
-      {Array.from({ length: 3 }).map((col) => (
-        <div key={col} className="space-y-3 rounded-2xl bg-white p-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="space-y-3 rounded-2xl bg-white p-3">
           <Skeleton className="h-6 w-24" />
           <Skeleton className="h-32 w-full rounded-xl" />
           <Skeleton className="h-32 w-full rounded-xl" />

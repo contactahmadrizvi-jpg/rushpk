@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Search, Shield } from "lucide-react";
+import { Search, Shield, UserCheck, ShieldAlert, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { listAllRegisteredUsers, updateUserAccess } from "@/services/users.service";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -20,6 +20,7 @@ import {
   ASSIGNABLE_ROLES,
   ROLE_PERMISSIONS,
   STAFF_PERMISSION_OPTIONS,
+  STAFF_ROLES,
 } from "@/constants";
 import type { AppUser, UserRole } from "@/types";
 import { TableRowsSkeleton } from "@/components/ui/loading-skeletons";
@@ -60,7 +61,10 @@ export default function RolesPage() {
 
   if (!canManageRoles(profile)) {
     return (
-      <p className="text-muted-foreground">You do not have permission to manage roles.</p>
+      <div className="flex h-[50vh] flex-col items-center justify-center gap-2">
+        <ShieldAlert className="h-10 w-10 text-destructive" />
+        <p className="font-semibold text-muted-foreground">You do not have permission to manage roles.</p>
+      </div>
     );
   }
 
@@ -91,7 +95,7 @@ export default function RolesPage() {
     setSaving(true);
     try {
       await updateUserAccess(user.id, { role, permissions, isActive });
-      toast.success(`${user.displayName} updated`);
+      toast.success(`${user.displayName} access updated`);
       await load();
       setSelectedId(user.id);
     } catch {
@@ -102,100 +106,91 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <Shield className="h-7 w-7 text-primary" />
-          User roles & access
+        <h1 className="flex items-center gap-2 text-3xl font-extrabold tracking-tight">
+          <Shield className="h-8 w-8 text-primary" />
+          Roles & Access Control
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Select any registered Firebase user, assign Admin or Staff role, and choose which
-          operations they can use.
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Manage system roles, configure combined duties, and define feature access levels for registered users.
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Select user</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="user-search">Search by name, email or role</Label>
-            <div className="relative mt-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="user-search"
-                className="pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="user-pick">Registered user ({filtered.length})</Label>
-            <select
-              id="user-pick"
-              className="mt-1 flex h-11 w-full rounded-xl border bg-background px-3 text-sm"
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              disabled={loading}
-            >
+      <div className="grid gap-6 lg:grid-cols-12">
+        {/* Left Pane: User list (simple, easy selection) */}
+        <div className="lg:col-span-5 space-y-4">
+          <Card className="shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">User Directory</CardTitle>
+              <CardDescription>Select a user to review or update their access permissions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, email or role..."
+                  className="pl-9 rounded-xl"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
               {loading ? (
-                <option>Loading...</option>
+                <TableRowsSkeleton rows={4} />
               ) : filtered.length === 0 ? (
-                <option value="">No users found</option>
+                <p className="text-sm text-muted-foreground text-center py-6">No users found</p>
               ) : (
-                filtered.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.displayName} — {u.email} ({ROLE_LABELS[u.role]})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {loading && !selected ? (
-        <TableRowsSkeleton rows={4} />
-      ) : selected ? (
-        <UserAccessEditor
-          user={selected}
-          assignableRoles={assignableRoles}
-          saving={saving}
-          isSelf={selected.id === profile?.id}
-          canAssignAdmin={canAssignManagementRoles(profile)}
-          onSave={saveAccess}
-        />
-      ) : null}
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">All registered users</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="max-h-64 overflow-y-auto divide-y">
-            {users.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => setSelectedId(u.id)}
-                className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50 ${
-                  u.id === selectedId ? "bg-primary/5" : ""
-                }`}
-              >
-                <div>
-                  <p className="font-semibold">{u.displayName}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}</p>
+                <div className="max-h-[500px] overflow-y-auto divide-y border rounded-xl bg-card">
+                  {filtered.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => setSelectedId(u.id)}
+                      className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition-all hover:bg-muted/50 ${
+                        u.id === selectedId ? "bg-primary/5 font-semibold text-primary border-l-4 border-primary" : "border-l-4 border-transparent"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{u.displayName}</p>
+                        <p className="truncate text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                      </div>
+                      <Badge variant={u.role === "customer" ? "secondary" : "default"} className="capitalize">
+                        {ROLE_LABELS[u.role] || u.role}
+                      </Badge>
+                    </button>
+                  ))}
                 </div>
-                <Badge variant={u.role === "customer" ? "secondary" : "default"}>
-                  {ROLE_LABELS[u.role]}
-                </Badge>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Pane: User Access Editor */}
+        <div className="lg:col-span-7">
+          {loading && !selected ? (
+            <Card className="shadow-md">
+              <CardContent className="py-12">
+                <TableRowsSkeleton rows={4} />
+              </CardContent>
+            </Card>
+          ) : selected ? (
+            <UserAccessEditor
+              user={selected}
+              assignableRoles={assignableRoles}
+              saving={saving}
+              isSelf={selected.id === profile?.id}
+              canAssignAdmin={canAssignManagementRoles(profile)}
+              onSave={saveAccess}
+            />
+          ) : (
+            <Card className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground shadow-md border-dashed">
+              <UserCheck className="h-10 w-10 text-muted-foreground/60 mb-2" />
+              <p>Please select a user from the directory to configure their roles & access.</p>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -220,189 +215,227 @@ function UserAccessEditor({
     active: boolean
   ) => void;
 }) {
-  const [role, setRole] = useState<UserRole>(user.role === "super_admin" ? "admin" : user.role);
-  const [perms, setPerms] = useState<string[]>(
-    user.permissions?.length ? user.permissions : [...(ROLE_PERMISSIONS[user.role] ?? [])]
-  );
-  const [isActive, setIsActive] = useState(user.isActive);
-  const [useCustomPerms, setUseCustomPerms] = useState(
-    !!(user.permissions && user.permissions.length > 0)
-  );
+  // Support multiple roles checkboxes
+  // Determine which roles are currently applicable based on user.permissions
+  // We initialize with the user's main role.
+  const [selectedRoles, setSelectedRoles] = useState<UserRole[]>([]);
 
   useEffect(() => {
-    const r = user.role === "super_admin" ? "admin" : user.role;
-    setRole(r);
-    setPerms(
-      user.permissions?.length ? user.permissions : [...(ROLE_PERMISSIONS[user.role] ?? [])]
-    );
+    // Determine active roles based on existing permissions and the primary role
+    const active: UserRole[] = [user.role];
+    
+    // Check if the user has custom permissions matching other roles
+    const userPerms = user.permissions || [];
+    if (userPerms.length > 0) {
+      STAFF_ROLES.forEach((r) => {
+        if (r === user.role) return;
+        const defaults = ROLE_PERMISSIONS[r] || [];
+        // If defaults is subset of userPerms, consider that role active
+        if (defaults.length > 0 && defaults.every(p => userPerms.includes(p))) {
+          if (!active.includes(r)) active.push(r);
+        }
+      });
+    }
+
+    setSelectedRoles(active.filter(r => r !== "super_admin"));
+    setPerms(user.permissions?.length ? user.permissions : [...(ROLE_PERMISSIONS[user.role] ?? [])]);
     setIsActive(user.isActive);
     setUseCustomPerms(!!(user.permissions && user.permissions.length > 0));
   }, [user.id, user.role, user.permissions, user.isActive]);
 
-  function onRoleChange(newRole: UserRole) {
-    setRole(newRole);
-    if (!useCustomPerms) {
-      setPerms([...(ROLE_PERMISSIONS[newRole] ?? [])]);
+  const [perms, setPerms] = useState<string[]>([]);
+  const [isActive, setIsActive] = useState(user.isActive);
+  const [useCustomPerms, setUseCustomPerms] = useState(false);
+
+  // Triggered when a checkbox for a role is toggled
+  function toggleRole(roleVal: UserRole) {
+    let nextRoles = [...selectedRoles];
+    if (nextRoles.includes(roleVal)) {
+      nextRoles = nextRoles.filter((r) => r !== roleVal);
+    } else {
+      nextRoles.push(roleVal);
     }
-    if (newRole === "customer") {
-      setPerms(["website"]);
-      setUseCustomPerms(true);
+
+    if (nextRoles.length === 0) {
+      nextRoles = ["employee"]; // Fallback default
     }
+
+    setSelectedRoles(nextRoles);
+
+    // Merge permissions of all selected roles
+    const mergedPerms = new Set<string>();
+    nextRoles.forEach((r) => {
+      const defaults = ROLE_PERMISSIONS[r] || [];
+      defaults.forEach((p) => mergedPerms.add(p));
+    });
+
+    setPerms(Array.from(mergedPerms));
   }
 
   function applyRoleDefaults() {
-    setPerms([...(ROLE_PERMISSIONS[role] ?? [])]);
+    const mergedPerms = new Set<string>();
+    selectedRoles.forEach((r) => {
+      const defaults = ROLE_PERMISSIONS[r] || [];
+      defaults.forEach((p) => mergedPerms.add(p));
+    });
+    setPerms(Array.from(mergedPerms));
     setUseCustomPerms(false);
   }
 
   const groups = [...new Set(STAFF_PERMISSION_OPTIONS.map((o) => o.group))];
-  const isCustomer = role === "customer";
+  const isCustomerOnly = selectedRoles.length === 1 && selectedRoles[0] === "customer";
   const showSuperAdmin = user.role === "super_admin";
 
   return (
-    <Card className="border-primary/30">
-      <CardHeader>
+    <Card className="border-primary/20 shadow-lg">
+      <CardHeader className="border-b bg-muted/20">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <CardTitle>{user.displayName}</CardTitle>
-            <p className="text-sm text-muted-foreground">{user.email}</p>
-            {user.phone && (
-              <p className="text-xs text-muted-foreground">{user.phone}</p>
-            )}
+            <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
+            {user.phone && <p className="text-xs text-muted-foreground mt-1">Phone: {user.phone}</p>}
           </div>
-          {showSuperAdmin && (
-            <Badge>Super Admin (protected)</Badge>
-          )}
+          {showSuperAdmin && <Badge className="bg-amber-600 hover:bg-amber-600 text-white">Super Admin (Protected)</Badge>}
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-6 pt-6">
         {showSuperAdmin && (
-          <p className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
-            This account is Super Admin with full system access.
+          <p className="rounded-xl bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
+            This account is a protected Super Admin with absolute root privileges.
           </p>
         )}
 
-        <label className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-3 bg-muted/40 p-4 rounded-xl border">
           <input
+            id="ac-active"
             type="checkbox"
             checked={isActive}
             onChange={(e) => setIsActive(e.target.checked)}
             disabled={isSelf}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
           />
-          Account active (can sign in)
-        </label>
+          <Label htmlFor="ac-active" className="cursor-pointer font-semibold text-sm">
+            Account Active (Permit sign-in to system)
+          </Label>
+        </div>
 
         {!showSuperAdmin && (
-          <div>
-            <Label>Account type</Label>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div className="space-y-3">
+            <Label className="text-base font-bold text-foreground">Select Active Roles (Assign Multiple)</Label>
+            <p className="text-xs text-muted-foreground">
+              Select all duties this user operates. Checking multiple roles will automatically combine their default access scopes.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
               {assignableRoles.map((opt) => (
                 <label
                   key={opt.value}
-                  className={`cursor-pointer rounded-xl border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5 ${
-                    role === opt.value ? "border-primary bg-primary/5" : ""
+                  className={`relative flex cursor-pointer items-start rounded-xl border p-3 hover:bg-muted/30 transition-all ${
+                    selectedRoles.includes(opt.value) ? "border-primary bg-primary/5" : "border-muted"
                   }`}
                 >
-                  <input
-                    type="radio"
-                    name="role"
-                    className="sr-only"
-                    checked={role === opt.value}
-                    onChange={() => onRoleChange(opt.value)}
-                  />
-                  <p className="font-semibold">{opt.label}</p>
-                  <p className="text-xs text-muted-foreground">{opt.hint}</p>
-                  <p className="mt-1 text-[10px] uppercase text-muted-foreground">{opt.group}</p>
+                  <div className="flex h-5 items-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      checked={selectedRoles.includes(opt.value)}
+                      onChange={() => toggleRole(opt.value)}
+                    />
+                  </div>
+                  <div className="ml-3 text-xs leading-4">
+                    <p className="font-semibold text-sm text-foreground">{opt.label}</p>
+                    <p className="text-muted-foreground mt-0.5">{opt.hint}</p>
+                    <Badge variant="outline" className="mt-1.5 text-[9px] uppercase tracking-wider scale-90 origin-left">
+                      {opt.group}
+                    </Badge>
+                  </div>
                 </label>
               ))}
             </div>
-            {!canAssignAdmin && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Only super admin can assign Admin role.
-              </p>
-            )}
           </div>
         )}
 
-        {!isCustomer && !showSuperAdmin && (
-          <div className="space-y-3">
+        {!isCustomerOnly && !showSuperAdmin && (
+          <div className="space-y-4 border-t pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label>Operations this user can access</Label>
-              <Button type="button" variant="outline" size="sm" onClick={applyRoleDefaults}>
-                Reset to role defaults
+              <Label className="text-base font-bold text-foreground">Custom Operations Sandbox</Label>
+              <Button type="button" variant="outline" size="sm" onClick={applyRoleDefaults} className="rounded-xl">
+                Reset to Combined Defaults
               </Button>
             </div>
-            <label className="flex items-center gap-2 text-sm">
+
+            <div className="flex items-center gap-3 bg-muted/40 p-4 rounded-xl border">
               <input
+                id="custom-perms-check"
                 type="checkbox"
                 checked={useCustomPerms}
                 onChange={(e) => {
                   setUseCustomPerms(e.target.checked);
                   if (!e.target.checked) applyRoleDefaults();
                 }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
-              Custom permissions (override role defaults)
-            </label>
+              <Label htmlFor="custom-perms-check" className="cursor-pointer font-semibold text-sm">
+                Override Combined Defaults (Enable custom sandbox permissions)
+              </Label>
+            </div>
 
             {groups.map((group) => (
-              <div key={group}>
-                <p className="text-xs font-bold uppercase text-muted-foreground">{group}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {STAFF_PERMISSION_OPTIONS.filter((o) => o.group === group).map((opt) => (
-                    <label
-                      key={opt.id}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                    >
-                      <input
-                        type="checkbox"
-                        disabled={!useCustomPerms && role === "admin"}
-                        checked={
-                          role === "admin" && !useCustomPerms
-                            ? true
-                            : perms.includes(opt.id) || perms.includes("*")
-                        }
-                        onChange={() => {
-                          setUseCustomPerms(true);
-                          setPerms((p) =>
-                            p.includes(opt.id)
-                              ? p.filter((x) => x !== opt.id && x !== "*")
-                              : [...p.filter((x) => x !== "*"), opt.id]
-                          );
-                        }}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
+              <div key={group} className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{group} Modules</p>
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+                  {STAFF_PERMISSION_OPTIONS.filter((o) => o.group === group).map((opt) => {
+                    const isChecked = perms.includes(opt.id) || perms.includes("*");
+                    return (
+                      <label
+                        key={opt.id}
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium hover:bg-muted/40 transition-all ${
+                          isChecked ? "border-primary bg-primary/5 text-primary" : "border-muted"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={!useCustomPerms}
+                          checked={isChecked}
+                          onChange={() => {
+                            setPerms((p) =>
+                              p.includes(opt.id)
+                                ? p.filter((x) => x !== opt.id && x !== "*")
+                                : [...p.filter((x) => x !== "*"), opt.id]
+                            );
+                          }}
+                          className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <span className="truncate">{opt.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             ))}
-            {role === "admin" && !useCustomPerms && (
-              <p className="text-xs text-muted-foreground">
-                Admin has full access by default. Enable custom permissions to limit access.
-              </p>
-            )}
           </div>
         )}
 
-        {isCustomer && (
-          <p className="text-sm text-muted-foreground">
-            Customer accounts can only use the website (menu, cart, track order).
+        {isCustomerOnly && (
+          <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-xl">
+            Customer roles can only access public web modules (menu shopping, cart checkouts, tracking orders).
           </p>
         )}
 
         <Button
           disabled={saving || (isSelf && !showSuperAdmin)}
+          className="w-full h-11 text-base rounded-xl font-semibold mt-4"
           onClick={() => {
-            const finalRole = showSuperAdmin ? "super_admin" : role;
-            const finalPerms = isCustomer
+            const finalRole = showSuperAdmin ? "super_admin" : selectedRoles[0] || "employee";
+            const finalPerms = isCustomerOnly
               ? ["website"]
               : useCustomPerms
                 ? perms.filter((p) => p !== "*")
-                : [];
+                : perms; // Use combined perms
+
             onSave(user, finalRole, finalPerms, isActive);
           }}
         >
-          {saving ? "Saving..." : "Save role & access"}
+          {saving ? "Saving Updates..." : "Save Role & Access Configuration"}
         </Button>
       </CardContent>
     </Card>

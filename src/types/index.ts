@@ -313,9 +313,10 @@ export interface AttendanceRecord {
   date: string;
   checkIn?: string;
   checkOut?: string;
-  checkInMethod: "gps" | "qr" | "device";
+  checkInMethod: "gps" | "qr" | "device" | "selfie";
   checkInLat?: number;
   checkInLng?: number;
+  selfieUrl?: string;
   isLate: boolean;
   workingMinutes?: number;
   overtimeMinutes?: number;
