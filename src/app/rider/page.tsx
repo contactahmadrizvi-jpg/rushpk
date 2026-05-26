@@ -57,7 +57,7 @@ export default function RiderDashboard() {
       <header className="bg-primary px-4 py-4 text-primary-foreground shadow-md sticky top-0 z-10 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Rider Dashboard</h1>
-          <p className="text-xs opacity-90">Welcome, {profile?.name || "Rider"}</p>
+          <p className="text-xs opacity-90">Welcome, {profile?.displayName || "Rider"}</p>
         </div>
         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={handleLogout}>
           <LogOut className="h-5 w-5" />
