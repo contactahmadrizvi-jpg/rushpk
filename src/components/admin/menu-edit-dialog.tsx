@@ -26,6 +26,14 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
   const [saving, setSaving] = useState(false);
   const [imageUrl, setImageUrl] = useState(item.imageUrl);
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
+  const [pizzaPrices, setPizzaPrices] = useState({
+    medium: item.variants?.find((v) => v.id === "medium")?.priceModifier
+      ? String(item.price + item.variants.find((v) => v.id === "medium")!.priceModifier)
+      : "",
+    large: item.variants?.find((v) => v.id === "large")?.priceModifier
+      ? String(item.price + item.variants.find((v) => v.id === "large")!.priceModifier)
+      : "",
+  });
   const [form, setForm] = useState({
     name: item.name,
     price: String(item.price),
@@ -55,6 +63,17 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
   async function handleSave() {
     setSaving(true);
     try {
+      const cat = categories.find((c) => c.id === form.categoryId);
+      let variants = item.variants;
+      if (cat?.type === "pizza") {
+        const basePrice = Number(form.price);
+        variants = [
+          { id: "small", name: "Small", priceModifier: 0 },
+          { id: "medium", name: "Medium", priceModifier: Number(pizzaPrices.medium) - basePrice },
+          { id: "large", name: "Large", priceModifier: Number(pizzaPrices.large) - basePrice },
+        ];
+      }
+
       await itemsRepo.update(item.id, {
         name: form.name,
         slug: slugify(form.name),
@@ -64,6 +83,7 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
         imageUrl: imageUrl?.trim() || undefined,
         isAvailable: form.isAvailable,
         isPopular: form.isPopular,
+        variants,
       } as Partial<MenuItem>);
 
       if (ingredients.length) {
@@ -118,6 +138,20 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
               ))}
             </select>
           </div>
+
+          {categories.find((c) => c.id === form.categoryId)?.type === "pizza" && (
+            <>
+              <div>
+                <Label>Medium Price (PKR)</Label>
+                <Input type="number" value={pizzaPrices.medium} onChange={(e) => setPizzaPrices({ ...pizzaPrices, medium: e.target.value })} placeholder="e.g. 900" />
+              </div>
+              <div>
+                <Label>Large Price (PKR)</Label>
+                <Input type="number" value={pizzaPrices.large} onChange={(e) => setPizzaPrices({ ...pizzaPrices, large: e.target.value })} placeholder="e.g. 1300" />
+              </div>
+            </>
+          )}
+
           <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">
             <label className="flex items-center gap-2 text-sm">
               <input

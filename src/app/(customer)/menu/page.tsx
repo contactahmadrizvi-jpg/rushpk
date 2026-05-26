@@ -19,7 +19,6 @@ function MenuContent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categorySlug, setCategorySlug] = useState(params.get("category") ?? "all");
-  const [selected, setSelected] = useState<MenuItem | null>(null);
   const addItem = useCartStore((s) => s.addItem);
 
   useEffect(() => {
@@ -67,12 +66,24 @@ function MenuContent() {
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((item) => (
-            <FoodCard key={item.id} item={item} onAdd={() => setSelected(item)} />
+            <FoodCard 
+              key={item.id} 
+              item={item} 
+              onAdd={(variantId) => {
+                const custom: any = {};
+                if (variantId && item.variants) {
+                  const v = item.variants.find((x) => x.id === variantId);
+                  if (v) {
+                    custom.variantId = v.id;
+                    custom.variantName = v.name;
+                  }
+                }
+                addItem(item, 1, custom);
+                toast.success(`Added ${item.name} to cart`);
+              }} 
+            />
           ))}
         </div>
-      )}
-      {selected && (
-        <ItemCustomizeDialog item={selected} open={!!selected} onClose={() => setSelected(null)} onAdd={(qty, custom) => { addItem(selected, qty, custom); setSelected(null); }} />
       )}
     </div>
   );

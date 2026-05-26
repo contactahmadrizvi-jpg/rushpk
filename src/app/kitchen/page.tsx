@@ -148,7 +148,7 @@ export default function KitchenPage() {
                       <ul className="mt-3 space-y-2 border-t border-slate-200 pt-3">
                         {order.items.map((item, i) => (
                           <li key={i} className="text-base font-bold text-slate-800">
-                            <span className="text-primary">{item.quantity}×</span> {item.name}
+                            <span className="text-primary">{item.quantity}×</span> {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
                             {item.customization?.notes && (
                               <span className="mt-0.5 block text-sm font-normal text-amber-700">
                                 ↳ {item.customization.notes}

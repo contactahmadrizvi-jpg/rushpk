@@ -15,7 +15,9 @@ interface Props {
 
 export function ItemCustomizeDialog({ item, open, onClose, onAdd }: Props) {
   const [qty, setQty] = useState(1);
-  const [variantId, setVariantId] = useState<string>();
+  const [variantId, setVariantId] = useState<string | undefined>(
+    item.variants && item.variants.length > 0 ? item.variants[0].id : undefined
+  );
   const [addonIds, setAddonIds] = useState<string[]>([]);
   const [extraCheese, setExtraCheese] = useState(false);
   const [spiceLevel, setSpiceLevel] = useState<string>();

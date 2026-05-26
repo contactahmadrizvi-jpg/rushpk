@@ -111,7 +111,7 @@ export default function AdminOrdersPage() {
                   className="flex items-center justify-between gap-4 px-3 py-2"
                 >
                   <span>
-                    <span className="font-bold">{item.quantity}×</span> {item.name}
+                    <span className="font-bold">{item.quantity}×</span> {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
                   </span>
                   <span className="shrink-0 font-medium">
                     {formatCurrency(item.subtotal)}

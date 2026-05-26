@@ -181,7 +181,22 @@ export default function HomePage() {
             </div>
             <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {catItems.map((item) => (
-                <FoodCard key={item.id} item={item} onAdd={() => addItem(item, 1, {})} />
+                <FoodCard 
+                  key={item.id} 
+                  item={item} 
+                  onAdd={(variantId) => {
+                    const custom: any = {};
+                    if (variantId && item.variants) {
+                      const v = item.variants.find((x) => x.id === variantId);
+                      if (v) {
+                        custom.variantId = v.id;
+                        custom.variantName = v.name;
+                      }
+                    }
+                    addItem(item, 1, custom);
+                    toast.success(`Added ${item.name} to cart`);
+                  }} 
+                />
               ))}
             </div>
           </section>

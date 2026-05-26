@@ -29,6 +29,7 @@ export default function AdminMenuPage() {
   const [search, setSearch] = useState("");
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [form, setForm] = useState({ name: "", price: "", categoryId: "", description: "" });
+  const [pizzaPrices, setPizzaPrices] = useState({ medium: "", large: "" });
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
@@ -78,6 +79,18 @@ export default function AdminMenuPage() {
       return;
     }
     const now = new Date().toISOString();
+    
+    const cat = categories.find((c) => c.id === form.categoryId);
+    let variants = undefined;
+    if (cat?.type === "pizza") {
+      const basePrice = Number(form.price);
+      variants = [
+        { id: "small", name: "Small", priceModifier: 0 },
+        { id: "medium", name: "Medium", priceModifier: Number(pizzaPrices.medium) - basePrice },
+        { id: "large", name: "Large", priceModifier: Number(pizzaPrices.large) - basePrice },
+      ];
+    }
+
     const id = await itemsRepo.create({
       categoryId: form.categoryId,
       name: form.name,
@@ -88,6 +101,7 @@ export default function AdminMenuPage() {
       isAvailable: true,
       isPopular: false,
       isFeatured: false,
+      variants,
       sortOrder: items.length,
       createdAt: now,
       updatedAt: now,
@@ -99,6 +113,7 @@ export default function AdminMenuPage() {
 
     toast.success("Item added");
     setForm({ name: "", price: "", categoryId: "", description: "" });
+    setPizzaPrices({ medium: "", large: "" });
     setImageUrl(undefined);
     setIngredients([]);
     setShowAdd(false);
@@ -168,6 +183,20 @@ export default function AdminMenuPage() {
                   ))}
                 </select>
               </div>
+              
+              {categories.find(c => c.id === form.categoryId)?.type === "pizza" && (
+                <>
+                  <div>
+                    <Label>Medium Price (PKR)</Label>
+                    <Input type="number" value={pizzaPrices.medium} onChange={(e) => setPizzaPrices({ ...pizzaPrices, medium: e.target.value })} placeholder="e.g. 900" />
+                  </div>
+                  <div>
+                    <Label>Large Price (PKR)</Label>
+                    <Input type="number" value={pizzaPrices.large} onChange={(e) => setPizzaPrices({ ...pizzaPrices, large: e.target.value })} placeholder="e.g. 1300" />
+                  </div>
+                </>
+              )}
+
               <div className="sm:col-span-2">
                 <Label>Description</Label>
                 <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />

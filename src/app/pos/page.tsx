@@ -244,7 +244,10 @@ export default function POSPage() {
                   <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-stone-900">{line.menuItem.name}</p>
+                  <p className="truncate font-bold text-stone-900">
+                    {line.menuItem.name}
+                    {line.customization?.variantName && <span className="ml-1 text-xs text-stone-500">({line.customization.variantName})</span>}
+                  </p>
                   <p className="text-sm font-semibold text-primary">
                     {formatCurrency(line.subtotal)}
                   </p>
@@ -420,16 +423,19 @@ export default function POSPage() {
                 <FoodGridSkeleton count={8} />
               </div>
             ) : filtered.map((item) => (
-              <button
+              <div
                 key={item.id}
-                type="button"
-                onClick={() => {
-                  addItem(item);
-                  if (window.innerWidth < 768) setShowCartMobile(true);
-                }}
-                className="group flex flex-col h-52 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40 active:scale-[0.98]"
+                className="group flex flex-col h-56 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40"
               >
-                <div className="relative flex-1 w-full overflow-hidden bg-stone-100">
+                <button
+                  type="button"
+                  className="relative flex-1 w-full overflow-hidden bg-stone-100 active:scale-[0.98]"
+                  onClick={() => {
+                    const custom = item.variants?.length ? { variantId: item.variants[0].id, variantName: item.variants[0].name } : {};
+                    addItem(item, 1, custom);
+                    if (window.innerWidth < 768) setShowCartMobile(true);
+                  }}
+                >
                   <MenuItemImage src={item.imageUrl} alt={item.name} fill />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent opacity-80" />
                   <span className="absolute bottom-2.5 left-3 right-3 truncate text-sm font-extrabold text-white drop-shadow-sm">
@@ -438,16 +444,42 @@ export default function POSPage() {
                   <span className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
                     <Plus className="h-4 w-4" />
                   </span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2.5 shrink-0 h-12 bg-white">
-                  <span className="text-base font-black text-primary">
-                    {formatCurrency(item.price)}
-                  </span>
-                  <span className="rounded-lg bg-orange-55 px-2 py-0.5 text-xs font-bold text-orange-700 bg-orange-50">
-                    + Add
-                  </span>
-                </div>
-              </button>
+                </button>
+
+                {item.variants && item.variants.length > 0 ? (
+                  <div className="flex shrink-0 items-center gap-1 bg-stone-50 p-1.5 h-[52px]">
+                    {item.variants.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => {
+                          addItem(item, 1, { variantId: v.id, variantName: v.name });
+                          if (window.innerWidth < 768) setShowCartMobile(true);
+                        }}
+                        className="flex-1 rounded-md bg-white py-1.5 text-[10px] font-bold text-stone-700 shadow-sm ring-1 ring-stone-200 hover:bg-stone-100 active:scale-95 sm:text-xs"
+                      >
+                        {v.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex shrink-0 items-center justify-between bg-white px-3 py-2.5 h-[52px] active:bg-stone-50"
+                    onClick={() => {
+                      addItem(item);
+                      if (window.innerWidth < 768) setShowCartMobile(true);
+                    }}
+                  >
+                    <span className="text-base font-black text-primary">
+                      {formatCurrency(item.price)}
+                    </span>
+                    <span className="rounded-lg bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-700">
+                      + Add
+                    </span>
+                  </button>
+                )}
+              </div>
             ))}
             {!menuLoading && !filtered.length && (
               <p className="col-span-full py-16 text-center text-stone-400">No items found</p>
