@@ -30,6 +30,7 @@ export default function AdminMenuPage() {
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [form, setForm] = useState({ name: "", price: "", categoryId: "", description: "" });
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -102,6 +103,17 @@ export default function AdminMenuPage() {
     setIngredients([]);
     setShowAdd(false);
     load();
+  }
+
+  async function deleteItem(id: string) {
+    try {
+      await itemsRepo.delete(id);
+      toast.success("Item deleted");
+      setItemToDelete(null);
+      load();
+    } catch {
+      toast.error("Failed to delete item");
+    }
   }
 
   if (loading) {
@@ -262,6 +274,14 @@ export default function AdminMenuPage() {
                               inventory={inventory}
                               onSaved={load}
                             />
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setItemToDelete(item.id)}
+                              className="ml-2"
+                            >
+                              Delete
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -271,6 +291,19 @@ export default function AdminMenuPage() {
               </CardContent>
             </Card>
           ))
+      )}
+
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setItemToDelete(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-destructive">Confirm Deletion</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to delete this menu item? This action cannot be undone.</p>
+            <div className="mt-6 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setItemToDelete(null)}>Cancel</Button>
+              <Button variant="destructive" className="flex-1" onClick={() => deleteItem(itemToDelete)}>Yes, Delete</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

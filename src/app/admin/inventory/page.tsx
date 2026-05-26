@@ -24,6 +24,7 @@ export default function AdminInventoryPage() {
     minStock: "10",
     stock: "0",
   });
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -75,6 +76,17 @@ export default function AdminInventoryPage() {
     await inventoryRepo.update(id, data);
     toast.success("Inventory updated");
     load();
+  }
+
+  async function deleteItem(id: string) {
+    try {
+      await inventoryRepo.delete(id);
+      toast.success("Item deleted");
+      setItemToDelete(null);
+      load();
+    } catch {
+      toast.error("Failed to delete item");
+    }
   }
 
   const ITEMS_TO_SEED = [
@@ -244,6 +256,13 @@ export default function AdminInventoryPage() {
                       +10
                     </Button>
                     <InventoryEditDialog item={item} onSave={(data) => saveEdit(item.id, data)} />
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setItemToDelete(item.id)}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -252,6 +271,19 @@ export default function AdminInventoryPage() {
         </table>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">{recipes.length} recipes linked to menu</p>
+
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setItemToDelete(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-destructive">Confirm Deletion</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Are you sure you want to delete this item? This action cannot be undone.</p>
+            <div className="mt-6 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setItemToDelete(null)}>Cancel</Button>
+              <Button variant="destructive" className="flex-1" onClick={() => deleteItem(itemToDelete)}>Yes, Delete</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
