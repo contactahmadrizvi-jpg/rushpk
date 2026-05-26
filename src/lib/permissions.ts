@@ -29,7 +29,10 @@ export function canAssignManagementRoles(user: AppUser | null | undefined): bool
 }
 
 export function getStaffHomeRoute(user: AppUser | null | undefined): string {
-  if (!user) return "/login";
+  if (userHasPermission(user, "*") || userHasPermission(user, "dashboard")) return "/admin";
+  if (userHasPermission(user, "pos")) return "/pos";
+  if (userHasPermission(user, "kitchen")) return "/kitchen";
+  if (userHasPermission(user, "delivery")) return "/admin";
   if (userHasPermission(user, "*") || userHasPermission(user, "dashboard")) return "/admin";
   if (userHasPermission(user, "pos")) return "/pos";
   if (userHasPermission(user, "kitchen")) return "/kitchen";

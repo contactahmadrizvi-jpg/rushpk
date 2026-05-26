@@ -47,7 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!isAdminRole(profile.role)) {
+  if (!isAdminRole(profile.role) && profile.role !== "delivery_rider") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
         <h1 className="text-xl font-bold">Access denied</h1>
@@ -58,6 +58,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
     );
   }
+
+
+
 
   return (
     <div className="flex min-h-screen bg-background">
