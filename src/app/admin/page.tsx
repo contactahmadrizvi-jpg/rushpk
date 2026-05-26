@@ -23,10 +23,6 @@ export default function AdminDashboardPage() {
   const [hourData, setHourData] = useState<{ hour: string; revenue: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Hook must be called unconditionally — before any early returns
-  const profile = useAuthStore((s) => s.profile);
-  const showRider = profile && (profile.role === "delivery_rider" || userHasPermission(profile, "delivery"));
-
   useEffect(() => {
     Promise.all([getDashboardStats(), getTodayOrders()]).then(([s, orders]) => {
       setStats(s);
@@ -36,6 +32,8 @@ export default function AdminDashboardPage() {
   }, []);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
+
+
 
   const cards = [
     { label: "Today Revenue", value: formatCurrency(stats?.todayRevenue ?? 0), icon: DollarSign },
@@ -48,6 +46,9 @@ export default function AdminDashboardPage() {
     { name: "Cash", value: stats?.cashPayments ?? 0 },
     { name: "Online", value: stats?.onlinePayments ?? 0 },
   ];
+
+  const profile = useAuthStore((s) => s.profile);
+  const showRider = profile && (profile.role === "delivery_rider" || userHasPermission(profile, "delivery"));
 
   return (
     <div>
