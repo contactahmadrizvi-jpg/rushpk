@@ -44,8 +44,11 @@ export default function TrackOrderPage() {
 
   if (loading && !order) {
     return (
-      <div className="mx-auto max-w-lg p-8">
-        <Skeleton className="h-64 w-full" />
+      <div className="mx-auto max-w-lg space-y-4 px-4 py-8">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-4 w-56" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-2xl" />
       </div>
     );
   }

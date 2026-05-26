@@ -8,13 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSettings, saveSettings, getDefaultSettings } from "@/services/settings.service";
 import type { RestaurantSettings } from "@/types";
+import { PageLoader } from "@/components/ui/page-loader";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    getSettings().then((s) => setSettings(s ?? getDefaultSettings()));
+    getSettings()
+      .then((s) => setSettings(s ?? getDefaultSettings()))
+      .finally(() => setLoading(false));
   }, []);
 
   async function save() {
@@ -38,7 +42,9 @@ export default function SettingsPage() {
     setUploading(false);
   }
 
-  if (!settings) return null;
+  if (loading || !settings) {
+    return <PageLoader message="Loading settings..." />;
+  }
 
   return (
     <div className="max-w-2xl">

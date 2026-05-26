@@ -10,6 +10,7 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { ORDER_STATUS_LABELS } from "@/constants";
 import type { Order } from "@/types";
 import { Badge } from "@/components/ui/badge";
+import { OrderListSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function TrackOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -34,7 +35,9 @@ export default function TrackOrdersPage() {
       </p>
 
       {loading ? (
-        <p className="mt-8 text-muted-foreground">Loading...</p>
+        <div className="mt-8">
+          <OrderListSkeleton count={3} />
+        </div>
       ) : orders.length === 0 ? (
         <div className="mt-10 rounded-2xl border bg-card p-8 text-center">
           <Package className="mx-auto h-12 w-12 text-muted-foreground" />

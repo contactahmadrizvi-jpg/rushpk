@@ -17,8 +17,10 @@ import { saveRecipeForMenuItem, getInventoryItems } from "@/services/inventory.s
 import { RecipeIngredientPicker, type DraftIngredient } from "@/components/admin/recipe-ingredient-picker";
 import { formatCurrency, slugify, cn } from "@/lib/utils";
 import type { MenuItem, MenuCategory, InventoryItem } from "@/types";
+import { TableRowsSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function AdminMenuPage() {
+  const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -30,15 +32,20 @@ export default function AdminMenuPage() {
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
 
   const load = async () => {
-    await ensureDefaultCategories();
-    const [list, cats, inv] = await Promise.all([
-      getMenuItems(),
-      categoriesRepo.getAll(),
-      getInventoryItems(),
-    ]);
-    setItems(list.sort((a, b) => a.sortOrder - b.sortOrder));
-    setCategories(cats.sort((a, b) => a.sortOrder - b.sortOrder));
-    setInventory(inv);
+    setLoading(true);
+    try {
+      await ensureDefaultCategories();
+      const [list, cats, inv] = await Promise.all([
+        getMenuItems(),
+        categoriesRepo.getAll(),
+        getInventoryItems(),
+      ]);
+      setItems(list.sort((a, b) => a.sortOrder - b.sortOrder));
+      setCategories(cats.sort((a, b) => a.sortOrder - b.sortOrder));
+      setInventory(inv);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -95,6 +102,15 @@ export default function AdminMenuPage() {
     setIngredients([]);
     setShowAdd(false);
     load();
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
+        <TableRowsSkeleton rows={8} />
+      </div>
+    );
   }
 
   return (

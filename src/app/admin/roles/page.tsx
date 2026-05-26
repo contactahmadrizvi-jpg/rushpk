@@ -22,6 +22,7 @@ import {
   STAFF_PERMISSION_OPTIONS,
 } from "@/constants";
 import type { AppUser, UserRole } from "@/types";
+import { TableRowsSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function RolesPage() {
   const profile = useAuthStore((s) => s.profile);
@@ -155,7 +156,9 @@ export default function RolesPage() {
         </CardContent>
       </Card>
 
-      {selected && (
+      {loading && !selected ? (
+        <TableRowsSkeleton rows={4} />
+      ) : selected ? (
         <UserAccessEditor
           user={selected}
           assignableRoles={assignableRoles}
@@ -164,7 +167,7 @@ export default function RolesPage() {
           canAssignAdmin={canAssignManagementRoles(profile)}
           onSave={saveAccess}
         />
-      )}
+      ) : null}
 
       <Card>
         <CardHeader className="pb-2">

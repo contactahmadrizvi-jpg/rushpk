@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/auth-store";
+import { PageLoader } from "@/components/ui/page-loader";
 
 export default function ProfilePage() {
   const { profile, loading, logout } = useAuthStore();
@@ -12,6 +13,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!loading && !profile) router.replace("/login");
   }, [profile, loading, router]);
+
+  if (loading) {
+    return <PageLoader message="Loading profile..." />;
+  }
 
   if (!profile) return null;
 

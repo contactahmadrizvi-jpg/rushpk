@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Menu } from "lucide-react";
 import { AdminSidebar, AdminMobileNav } from "@/components/admin/sidebar";
 import { useAuthStore, isAdminRole } from "@/stores/auth-store";
-import { Skeleton } from "@/components/ui/skeleton";
+import { AdminAuthLoading } from "@/components/ui/page-loader";
 import { Button } from "@/components/ui/button";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -25,11 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [firebaseUser, loading, router]);
 
   if (loading || !checked) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Skeleton className="h-12 w-48" />
-      </div>
-    );
+    return <AdminAuthLoading />;
   }
 
   if (!firebaseUser) return null;

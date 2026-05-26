@@ -6,17 +6,32 @@ import { getBestSellers } from "@/services/analytics.service";
 import { formatCurrency } from "@/lib/utils";
 import type { Order } from "@/types";
 import { Button } from "@/components/ui/button";
+import { StatsGridSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function ReportsPage() {
+  const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sellers, setSellers] = useState<ReturnType<typeof getBestSellers>>([]);
 
   useEffect(() => {
-    getTodayOrders().then((o) => {
-      setOrders(o);
-      setSellers(getBestSellers(o));
-    });
+    getTodayOrders()
+      .then((o) => {
+        setOrders(o);
+        setSellers(getBestSellers(o));
+      })
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold">Reports</h1>
+        <div className="mt-6">
+          <StatsGridSkeleton count={3} />
+        </div>
+      </div>
+    );
+  }
 
   function exportCSV() {
     const rows = [["Order", "Customer", "Phone", "Total", "Payment", "Date"]];

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loginUser, getUserProfile } from "@/services/auth.service";
 import { useAuthStore, isAdminRole } from "@/stores/auth-store";
 import { getStaffHomeRoute } from "@/lib/permissions";
+import { PageLoader } from "@/components/ui/page-loader";
 
 function LoginForm() {
   const router = useRouter();
@@ -30,6 +31,10 @@ function LoginForm() {
       router.replace(redirect.startsWith("/admin") || redirect === "/pos" ? redirect : home);
     }
   }, [loading, firebaseUser, profile, router, redirect]);
+
+  if (loading) {
+    return <PageLoader message="Checking session..." />;
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

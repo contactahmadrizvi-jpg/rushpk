@@ -7,15 +7,37 @@ import type { Employee } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { TableRowsSkeleton } from "@/components/ui/loading-skeletons";
 
 const repo = new BaseRepository<Employee>(COLLECTIONS.employees);
 
 export default function EmployeesPage() {
+  const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [form, setForm] = useState({ name: "", email: "", phone: "", cnic: "", salary: "", role: "employee" });
 
-  const load = () => repo.getAll().then(setEmployees);
-  useEffect(() => { load(); }, []);
+  const load = async () => {
+    setLoading(true);
+    try {
+      setEmployees(await repo.getAll());
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold">Employees</h1>
+        <div className="mt-6">
+          <TableRowsSkeleton rows={6} />
+        </div>
+      </div>
+    );
+  }
 
   async function add() {
     const now = new Date().toISOString();

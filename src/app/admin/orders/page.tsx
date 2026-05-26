@@ -8,25 +8,43 @@ import { ORDER_STATUS_LABELS } from "@/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { canViewOrders, ordersFilterForUser } from "@/lib/permissions";
 import type { Order } from "@/types";
+import { OrderListSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function AdminOrdersPage() {
   const profile = useAuthStore((s) => s.profile);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const filter = ordersFilterForUser(profile);
 
   useEffect(() => {
-    if (filter === "none") return;
+    if (filter === "none") {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     return subscribeOrders((list) => {
       if (filter === "online") {
         setOrders(list.filter((o) => o.source === "website"));
       } else {
         setOrders(list);
       }
+      setLoading(false);
     });
   }, [filter]);
 
   if (!canViewOrders(profile)) {
     return <p className="text-muted-foreground">No access to orders.</p>;
+  }
+
+  if (loading) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold">Orders</h1>
+        <div className="mt-6">
+          <OrderListSkeleton count={5} />
+        </div>
+      </div>
+    );
   }
 
   return (

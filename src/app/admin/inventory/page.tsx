@@ -10,8 +10,10 @@ import { InventoryEditDialog } from "@/components/admin/inventory-edit-dialog";
 import { getInventoryItems, inventoryRepo, recipeRepo, adjustStock } from "@/services/inventory.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { InventoryItem, Recipe, InventoryUnit } from "@/types";
+import { TableRowsSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function AdminInventoryPage() {
+  const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const profile = useAuthStore((s) => s.profile);
@@ -22,14 +24,31 @@ export default function AdminInventoryPage() {
     stock: "0",
   });
 
-  const load = () => {
-    getInventoryItems().then(setItems);
-    recipeRepo.getAll().then(setRecipes);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [inv, rec] = await Promise.all([getInventoryItems(), recipeRepo.getAll()]);
+      setItems(inv);
+      setRecipes(rec);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     load();
   }, []);
+
+  if (loading) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold">Inventory</h1>
+        <div className="mt-6">
+          <TableRowsSkeleton rows={8} />
+        </div>
+      </div>
+    );
+  }
 
   async function addInventory() {
     if (!newItem.name) return;

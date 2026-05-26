@@ -10,8 +10,11 @@ import { playOrderSound } from "@/lib/print";
 import type { Order, KitchenStatus } from "@/types";
 import { RESTAURANT } from "@/constants";
 
+import { KitchenColumnsSkeleton } from "@/components/ui/loading-skeletons";
+
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const prevCount = useRef(0);
 
   useEffect(() => {
@@ -27,6 +30,7 @@ export default function KitchenPage() {
       if (merged.length > prevCount.current) playOrderSound();
       prevCount.current = merged.length;
       setOrders(merged);
+      setLoading(false);
     };
 
     const unsub = subscribeKitchenOrders((kitchen) => {
@@ -82,6 +86,9 @@ export default function KitchenPage() {
         </div>
       </header>
 
+      {loading ? (
+        <KitchenColumnsSkeleton />
+      ) : (
       <div className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-3">
         {columns.map((col) => {
           const colOrders = orders.filter((o) => (o.kitchenStatus ?? "new") === col.status);
@@ -190,6 +197,7 @@ export default function KitchenPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

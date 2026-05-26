@@ -30,6 +30,7 @@ import type { MenuItem, OrderItem, OrderType, MenuCategory } from "@/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { userHasPermission } from "@/lib/permissions";
 import { RESTAURANT } from "@/constants";
+import { FoodGridSkeleton } from "@/components/ui/loading-skeletons";
 
 const CATEGORY_LABEL: Record<string, string> = {
   "cat-shawarma": "Shawarma",
@@ -56,6 +57,7 @@ export default function POSPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [paying, setPaying] = useState(false);
+  const [menuLoading, setMenuLoading] = useState(true);
   const [showCartMobile, setShowCartMobile] = useState(false);
 
   const {
@@ -87,7 +89,10 @@ export default function POSPage() {
     preloadPrintHeader();
     const stopSync = startPosSyncWorker();
     getActiveCategories().then(setCategories);
-    const unsub = subscribeMenuItems(setMenu);
+    const unsub = subscribeMenuItems((items) => {
+      setMenu(items);
+      setMenuLoading(false);
+    });
     return () => {
       unsub();
       stopSync();
@@ -415,7 +420,11 @@ export default function POSPage() {
           </div>
 
           <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto px-3 pb-24 sm:grid-cols-3 sm:px-4 sm:pb-4 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((item) => (
+            {menuLoading ? (
+              <div className="col-span-full p-2">
+                <FoodGridSkeleton count={8} />
+              </div>
+            ) : filtered.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -445,7 +454,7 @@ export default function POSPage() {
                 </div>
               </button>
             ))}
-            {!filtered.length && (
+            {!menuLoading && !filtered.length && (
               <p className="col-span-full py-16 text-center text-stone-400">No items found</p>
             )}
           </div>
