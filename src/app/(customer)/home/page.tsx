@@ -13,6 +13,7 @@ import { HOME_MENU_SECTION_IDS } from "@/data/default-menu-categories";
 import { useCartStore } from "@/stores/cart-store";
 import type { MenuCategory, MenuItem, Deal } from "@/types";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
+import { toast } from "sonner";
 
 export default function HomePage() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);

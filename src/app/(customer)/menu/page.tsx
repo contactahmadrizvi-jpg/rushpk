@@ -11,6 +11,7 @@ import { getActiveCategories, subscribeMenuItems } from "@/services/menu.service
 import { useCartStore } from "@/stores/cart-store";
 import type { MenuCategory, MenuItem } from "@/types";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
+import { toast } from "sonner";
 
 function MenuContent() {
   const params = useSearchParams();
