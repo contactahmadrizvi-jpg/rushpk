@@ -20,6 +20,7 @@ const STEPS = [
   { key: "received", label: "Order Received" },
   { key: "preparing", label: "Preparing" },
   { key: "in_kitchen", label: "In Kitchen" },
+  { key: "ready", label: "Ready" },
   { key: "out_for_delivery", label: "Out for Delivery" },
   { key: "delivered", label: "Delivered" },
 ];

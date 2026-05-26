@@ -33,6 +33,7 @@ export function getStaffHomeRoute(user: AppUser | null | undefined): string {
   if (userHasPermission(user, "*") || userHasPermission(user, "dashboard")) return "/admin";
   if (userHasPermission(user, "pos")) return "/pos";
   if (userHasPermission(user, "kitchen")) return "/kitchen";
+  if (userHasPermission(user, "delivery")) return "/rider";
   if (userHasPermission(user, "orders") || userHasPermission(user, "online_orders")) {
     return "/admin/orders";
   }

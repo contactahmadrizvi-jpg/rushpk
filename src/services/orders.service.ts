@@ -141,6 +141,17 @@ export function subscribeKitchenOrders(callback: (orders: Order[]) => void): () 
   });
 }
 
+export function subscribeDeliveryOrders(callback: (orders: Order[]) => void): () => void {
+  const ACTIVE_DELIVERY = new Set(["pending", "received", "preparing", "in_kitchen", "ready", "out_for_delivery"]);
+  return ordersRepo.subscribe([orderBy("createdAt", "desc"), limit(100)], (orders) => {
+    callback(
+      orders
+        .filter((o) => o.type === "delivery" && ACTIVE_DELIVERY.has(o.status))
+        .sort((a, b) => (a.dailyOrderNumber ?? 0) - (b.dailyOrderNumber ?? 0))
+    );
+  });
+}
+
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
   const orders = await ordersRepo.getAll([orderBy("createdAt", "desc"), limit(50)]);
   return orders.filter((o) => o.userId === userId);
