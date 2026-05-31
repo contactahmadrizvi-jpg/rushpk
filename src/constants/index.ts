@@ -103,7 +103,7 @@ export const ADMIN_ROLES: UserRole[] = [
   "cashier",
   "kitchen_staff",
   "delivery_rider",
-  "employee",
+  // "employee" intentionally excluded — employees have no admin access
 ];
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {

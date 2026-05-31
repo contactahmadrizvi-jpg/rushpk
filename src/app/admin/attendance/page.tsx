@@ -105,7 +105,7 @@ type CheckInStep =
 export default function AttendancePage() {
   const { profile } = useAuthStore();
   const isSA = isSuperAdmin(profile);
-  // admins (super_admin OR admin) can enroll employee faces
+  // admins (super_admin OR admin) can enroll any employee's face
   const isAdmin = isSA || profile?.role === "admin";
 
   // ── face-api boot ──
@@ -230,9 +230,9 @@ export default function AttendancePage() {
 
   useEffect(() => {
     loadLogs();
-    if (isSA) loadStaff();
+    if (isAdmin) loadStaff();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSA]);
+  }, [isAdmin]);
 
   // ==========================================================================
   // 3. Face detection ticker (check-in camera)
@@ -654,7 +654,7 @@ export default function AttendancePage() {
       )}
 
       {/* ========================================================
-          ENROLL TAB (admin + super admin)
+          ENROLL TAB (admin + super admin only)
          ======================================================== */}
       {tab === "enroll" && isAdmin && (
         <Card className="overflow-hidden rounded-2xl border-stone-100 shadow-sm">
