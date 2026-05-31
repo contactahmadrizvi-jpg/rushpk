@@ -225,8 +225,7 @@ export default function POSPage() {
     setCity("Sheikhupura");
     setPaying(false);
     setShowCartMobile(false);
-    toast.success(`Order #${num} sent to Kitchen — printing KOT`);
-    requestAnimationFrame(() => void printKOT(order));
+    toast.success(`Order #${num} sent to Kitchen successfully!`);
   }, [
     paying,
     items,
@@ -431,7 +430,7 @@ export default function POSPage() {
           className="h-14 w-full rounded-2xl text-lg font-bold shadow-lg shadow-primary/25"
           onClick={placeOrder}
         >
-          {paying ? "Processing..." : `Pay & Print · F2`}
+          {paying ? "Processing..." : `Send to Kitchen · F2`}
         </Button>
         {items.length > 0 && (
           <button
