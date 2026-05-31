@@ -16,6 +16,7 @@ import {
   Minus,
   Plus,
   Sparkles,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,18 @@ export default function POSPage() {
   const [menuLoading, setMenuLoading] = useState(true);
   const [showCartMobile, setShowCartMobile] = useState(false);
 
+  // Delivery Address State
+  const [street, setStreet] = useState("");
+  const [area, setArea] = useState("");
+  const [city, setCity] = useState("Sheikhupura");
+
+  // Autocomplete Suggestions State
+  const [savedCustomers, setSavedCustomers] = useState<any[]>([]);
+  const [phoneSuggestions, setPhoneSuggestions] = useState<any[]>([]);
+
+  // Table Dialpad State
+  const [showDialpad, setShowDialpad] = useState(false);
+
   const {
     items,
     orderType,
@@ -68,13 +81,14 @@ export default function POSPage() {
     tableNumber,
     discount,
     setOrderType,
-    setCustomer,
+    setTable,
     setTableNumber,
     addItem,
     removeItem,
     updateQty,
     clearOrder,
     getSubtotal,
+    setCustomer,
   } = usePOSStore();
 
   useEffect(() => {
@@ -89,6 +103,11 @@ export default function POSPage() {
       setMenu(items);
       setMenuLoading(false);
     });
+
+    // Load saved customers
+    const loaded = JSON.parse(localStorage.getItem("pos_saved_customers") || "[]");
+    setSavedCustomers(loaded);
+
     return () => {
       unsub();
       stopSync();
@@ -111,18 +130,54 @@ export default function POSPage() {
   const total = subtotal - discount;
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
 
+  const selectSuggestion = (s: any) => {
+    setCustomer(s.name, s.phone);
+    setStreet(s.street || "");
+    setArea(s.area || "");
+    setCity(s.city || "Sheikhupura");
+    setPhoneSuggestions([]);
+  };
+
+  const handleDialpadPress = (val: string) => {
+    let current = String(tableNumber ?? "");
+    if (val === "C") {
+      setTableNumber(undefined);
+    } else if (val === "back") {
+      const next = current.slice(0, -1);
+      setTableNumber(next ? Number(next) : undefined);
+    } else {
+      const next = current + val;
+      setTableNumber(Number(next));
+    }
+  };
+
   const placeOrder = useCallback(() => {
     if (paying) return;
-    if (!customerName.trim() || !customerPhone.trim()) {
-      toast.error("Add customer name & phone");
-      return;
-    }
     if (!items.length) {
       toast.error("Tap items to add to cart");
       return;
     }
 
     setPaying(true);
+
+    const nameToUse = customerName.trim() || "Walk-in Customer";
+    const phoneToUse = customerPhone.trim() || "";
+
+    // Save Delivery Address if filled
+    if (orderType === "delivery" && phoneToUse) {
+      const newSaved = {
+        phone: phoneToUse,
+        name: nameToUse,
+        street,
+        area,
+        city,
+      };
+      const filteredList = savedCustomers.filter((c: any) => c.phone !== phoneToUse);
+      const updatedList = [newSaved, ...filteredList];
+      localStorage.setItem("pos_saved_customers", JSON.stringify(updatedList));
+      setSavedCustomers(updatedList);
+    }
+
     const orderItems: OrderItem[] = items.map((line, i) => ({
       id: `pos-${i}`,
       menuItemId: line.menuItem.id,
@@ -133,25 +188,41 @@ export default function POSPage() {
       subtotal: line.subtotal,
     }));
 
+    const deliveryCharge = orderType === "delivery" ? 150 : 0;
+    const finalTotal = total + deliveryCharge;
+
     const input: CreateOrderInput = {
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerName: nameToUse,
+      customerPhone: phoneToUse,
       type: orderType,
       items: orderItems,
       subtotal,
       tax: 0,
-      deliveryCharge: 0,
+      deliveryCharge,
       discount,
-      total,
+      total: finalTotal,
       paymentMethod: "cash",
-      tableNumber,
       source: "pos",
       createdBy: profile?.id,
+      ...(orderType === "dine_in" && tableNumber ? { tableNumber } : {}),
+      ...(orderType === "delivery" ? {
+        deliveryAddress: {
+          id: "pos-delivery",
+          label: "POS Delivery",
+          street,
+          area,
+          city,
+          phone: phoneToUse,
+        }
+      } : {}),
     };
 
     const { order } = buildInstantPosOrder(input);
     const num = order.dailyOrderNumber ?? order.orderNumber;
     clearOrder();
+    setStreet("");
+    setArea("");
+    setCity("Sheikhupura");
     setPaying(false);
     setShowCartMobile(false);
     toast.success(`Order #${num} — printing`);
@@ -168,7 +239,10 @@ export default function POSPage() {
     tableNumber,
     profile,
     clearOrder,
-    setCustomer,
+    street,
+    area,
+    city,
+    savedCustomers,
   ]);
 
   useEffect(() => {
@@ -183,13 +257,13 @@ export default function POSPage() {
   }, [placeOrder]);
 
   const cartPanel = (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full flex-col bg-white relative">
       {/* Customer — compact */}
       <div className="border-b bg-gradient-to-br from-orange-50 to-white p-4">
         <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
-          <User className="h-3.5 w-3.5" /> Customer
+          <User className="h-3.5 w-3.5" /> Customer (Optional)
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2 relative">
           <div className="relative">
             <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <Input
@@ -205,25 +279,109 @@ export default function POSPage() {
               className="h-11 rounded-xl border-stone-200 bg-white pl-9"
               placeholder="Phone"
               value={customerPhone}
-              onChange={(e) => setCustomer(customerName, e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCustomer(customerName, val);
+                if (val.length >= 2) {
+                  const matches = savedCustomers.filter((c) =>
+                    c.phone.toLowerCase().includes(val.toLowerCase())
+                  );
+                  setPhoneSuggestions(matches);
+                } else {
+                  setPhoneSuggestions([]);
+                }
+              }}
             />
+            {/* suggestions dropdown */}
+            {phoneSuggestions.length > 0 && (
+              <ul className="absolute left-0 right-0 top-12 z-50 max-h-40 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
+                {phoneSuggestions.map((s, idx) => (
+                  <li key={idx}>
+                    <button
+                      type="button"
+                      onClick={() => selectSuggestion(s)}
+                      className="w-full px-3 py-2 text-left text-xs text-stone-800 hover:bg-stone-50 border-b border-stone-50 font-bold"
+                    >
+                      📞 {s.phone} <span className="text-stone-400 font-normal">({s.name})</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
-        {orderType === "dine_in" && (
-          <div className="relative mt-2">
-            <Utensils className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+
+        {/* Delivery Address fields */}
+        {orderType === "delivery" && (
+          <div className="mt-3 space-y-2 border-t pt-3 border-stone-100">
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
+              <MapPin className="h-3.5 w-3.5" /> Delivery Address
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input
+                className="h-10 rounded-xl border-stone-200 bg-white text-xs"
+                placeholder="Street / House No."
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+              />
+              <Input
+                className="h-10 rounded-xl border-stone-200 bg-white text-xs"
+                placeholder="Area"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+              />
+            </div>
             <Input
-              type="number"
-              className="h-11 rounded-xl border-stone-200 bg-white pl-9"
-              placeholder="Table no."
-              value={tableNumber ?? ""}
-              onChange={(e) =>
-                setTableNumber(e.target.value ? Number(e.target.value) : undefined)
-              }
+              className="h-10 rounded-xl border-stone-200 bg-white text-xs"
+              placeholder="City"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
             />
           </div>
         )}
+
+        {/* Dine-in Table selections with dialpad */}
+        {orderType === "dine_in" && (
+          <div className="relative mt-2">
+            <Utensils className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <button
+              type="button"
+              onClick={() => setShowDialpad(true)}
+              className="h-11 w-full rounded-xl border border-stone-200 bg-white pl-9 text-left text-sm font-semibold flex items-center"
+            >
+              {tableNumber != null ? `Table #${tableNumber}` : "Select Table No."}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Table Dialpad Overlay */}
+      {showDialpad && (
+        <div className="absolute inset-x-0 bottom-0 z-50 rounded-t-3xl border-t bg-stone-50 p-4 shadow-2xl">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <span className="text-sm font-black text-stone-600">Dine-in Table Selector</span>
+            <button
+              type="button"
+              onClick={() => setShowDialpad(false)}
+              className="text-xs font-bold text-primary hover:underline bg-stone-200/50 px-3 py-1 rounded-full"
+            >
+              Done
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => handleDialpadPress(k)}
+                className="flex h-12 items-center justify-center rounded-xl bg-white text-lg font-black text-stone-800 shadow-sm active:scale-95"
+              >
+                {k === "back" ? "⌫" : k}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Cart list */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">

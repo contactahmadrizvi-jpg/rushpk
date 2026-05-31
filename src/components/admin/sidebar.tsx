@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   Monitor,
-  ChefHat,
   Clock,
   Shield,
   X,
@@ -30,8 +29,7 @@ const nav = [
   { href: "/admin/roles", icon: Shield, label: "Roles", perm: "roles" },
   { href: "/admin/attendance", icon: Clock, label: "Attendance", perm: "attendance" },
   { href: "/admin/reports", icon: BarChart3, label: "Reports", perm: "reports" },
-  { href: "/pos", icon: Monitor, label: "POS", perm: "pos" },
-  { href: "/kitchen", icon: ChefHat, label: "Kitchen", perm: "kitchen" },
+  { href: "/pos-kitchen", icon: Monitor, label: "POS & Kitchen", perm: "pos_kitchen" },
   { href: "/admin/settings", icon: Settings, label: "Settings", perm: "settings" },
 ];
 
@@ -44,6 +42,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       return (
         userHasPermission(profile, "orders") ||
         userHasPermission(profile, "online_orders")
+      );
+    }
+    if (item.perm === "pos_kitchen") {
+      return (
+        userHasPermission(profile, "pos") ||
+        userHasPermission(profile, "kitchen")
       );
     }
     return userHasPermission(profile, item.perm);

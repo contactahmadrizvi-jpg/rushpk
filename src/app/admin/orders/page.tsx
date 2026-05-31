@@ -14,6 +14,7 @@ export default function AdminOrdersPage() {
   const profile = useAuthStore((s) => s.profile);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
   const filter = ordersFilterForUser(profile);
 
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -46,6 +47,11 @@ export default function AdminOrdersPage() {
     return <p className="text-muted-foreground">No access to orders.</p>;
   }
 
+  const isPending = (o: Order) => !["delivered", "served", "cancelled"].includes(o.status);
+  const allCount = orders.length;
+  const pendingCount = orders.filter(isPending).length;
+  const displayedOrders = activeTab === "all" ? orders : orders.filter(isPending);
+
   if (loading) {
     return (
       <div>
@@ -67,10 +73,10 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Orders</h1>
-          <p className="text-sm text-muted-foreground">{orders.length} total</p>
+          <p className="text-sm text-muted-foreground">{allCount} total for this date</p>
         </div>
         <input
           type="date"
@@ -79,8 +85,35 @@ export default function AdminOrdersPage() {
           className="rounded-md border bg-background px-3 py-1.5 text-sm"
         />
       </div>
+
+      {/* Tabs */}
+      <div className="mt-6 flex border-b">
+        <button
+          type="button"
+          onClick={() => setActiveTab("all")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${
+            activeTab === "all"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          All Orders ({allCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("pending")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${
+            activeTab === "pending"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Pending Orders ({pendingCount})
+        </button>
+      </div>
+
       <div className="mt-6 space-y-4">
-        {orders.map((o) => (
+        {displayedOrders.map((o) => (
           <div key={o.id} className="rounded-xl border bg-card p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -121,7 +154,7 @@ export default function AdminOrdersPage() {
             </ul>
           </div>
         ))}
-        {!orders.length && (
+        {!displayedOrders.length && (
           <p className="py-12 text-center text-muted-foreground">No orders yet</p>
         )}
       </div>
