@@ -97,9 +97,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 export function AdminSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
-      <div className="border-b p-6">
-        <p className="font-bold text-primary">{RESTAURANT.name}</p>
-        <p className="text-xs text-muted-foreground">Management</p>
+      <div className="border-b p-6 flex items-center gap-3">
+        <img src="/logo.jpeg" alt="Logo" className="h-10 w-10 rounded-lg object-cover border" />
+        <div>
+          <p className="font-bold text-primary text-sm leading-tight">{RESTAURANT.name}</p>
+          <p className="text-[10px] text-muted-foreground">Management</p>
+        </div>
       </div>
       <NavLinks />
     </aside>
@@ -125,9 +128,12 @@ export function AdminMobileNav({
       />
       <aside className="absolute left-0 top-0 flex h-full w-[min(85vw,280px)] flex-col bg-card shadow-xl">
         <div className="flex items-center justify-between border-b p-4">
-          <div>
-            <p className="font-bold text-primary">{RESTAURANT.name}</p>
-            <p className="text-xs text-muted-foreground">Menu</p>
+          <div className="flex items-center gap-3">
+            <img src="/logo.jpeg" alt="Logo" className="h-10 w-10 rounded-lg object-cover border" />
+            <div>
+              <p className="font-bold text-primary text-sm leading-tight">{RESTAURANT.name}</p>
+              <p className="text-[10px] text-muted-foreground">Menu</p>
+            </div>
           </div>
           <button
             type="button"

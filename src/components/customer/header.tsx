@@ -39,9 +39,11 @@ export function CustomerHeader() {
       <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 lg:px-8">
           <Link href="/home" className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-lg font-black text-primary-foreground">
-              R
-            </div>
+            <img 
+              src="/logo.jpeg" 
+              alt="Rush Pizza and Burger Logo" 
+              className="h-10 w-10 rounded-xl object-cover border bg-card"
+            />
             <div className="hidden sm:block">
               <p className="text-sm font-bold leading-tight">{RESTAURANT.name}</p>
               <p className="text-xs text-muted-foreground">{RESTAURANT.location}</p>
