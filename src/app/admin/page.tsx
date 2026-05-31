@@ -7,10 +7,10 @@ import RiderDashboard from "@/components/admin/RiderDashboard";
 import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getDashboardStats, getBestSellers, getRevenueByHour } from "@/services/analytics.service";
-import { getTodayOrders } from "@/services/orders.service";
+import { getRevenueByHour } from "@/services/analytics.service";
+import { subscribeOrders } from "@/services/orders.service";
+import { getLowStockItems } from "@/services/inventory.service";
 import { formatCurrency } from "@/lib/utils";
-import type { DashboardStats } from "@/types";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -19,54 +19,109 @@ import {
 const COLORS = ["#dc2f02", "#e85d04", "#f48c06", "#2d6a4f"];
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [hourData, setHourData] = useState<{ hour: string; revenue: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Hook must be called unconditionally — before any early returns
+  // Date selection state
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+
   const profile = useAuthStore((s) => s.profile);
   const showRider = profile && (profile.role === "delivery_rider" || userHasPermission(profile, "delivery"));
 
   useEffect(() => {
-    Promise.all([getDashboardStats(), getTodayOrders()]).then(([s, orders]) => {
-      setStats(s);
-      setHourData(getRevenueByHour(orders));
+    setLoading(true);
+
+    const start = new Date(`${selectedDate}T00:00:00`);
+    const end = new Date(`${selectedDate}T23:59:59.999`);
+
+    // Subscribe to selected date orders
+    const unsub = subscribeOrders((list) => {
+      setOrders(list);
+      setHourData(getRevenueByHour(list));
       setLoading(false);
-    });
-  }, []);
+    }, start.toISOString(), end.toISOString());
+
+    // Fetch low stock items count
+    getLowStockItems().then(items => setLowStockCount(items.length));
+
+    return () => unsub();
+  }, [selectedDate]);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
 
+  // Compute dashboard metrics dynamically from loaded orders
+  const todayRevenue = orders
+    .filter((o) => o.status !== "cancelled")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const pendingOrders = orders.filter(
+    (o) => !["delivered", "served", "cancelled"].includes(o.status)
+  ).length;
+
+  const onlinePayments = orders
+    .filter((o) => o.paymentMethod === "online" && o.paymentStatus === "paid")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const cashPayments = orders
+    .filter((o) => o.paymentMethod === "cash")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const cardPayments = orders
+    .filter((o) => o.paymentMethod === "card")
+    .reduce((sum, o) => sum + o.total, 0);
+
   const cards = [
-    { label: "Today Revenue", value: formatCurrency(stats?.todayRevenue ?? 0), icon: DollarSign },
-    { label: "Today Orders", value: String(stats?.todayOrders ?? 0), icon: ShoppingBag },
-    { label: "Pending Orders", value: String(stats?.pendingOrders ?? 0), icon: TrendingUp },
-    { label: "Low Stock", value: String(stats?.lowStockCount ?? 0), icon: AlertTriangle },
+    { label: "Selected Date Revenue", value: formatCurrency(todayRevenue), icon: DollarSign },
+    { label: "Selected Date Orders", value: String(orders.length), icon: ShoppingBag },
+    { label: "Pending Orders Count", value: String(pendingOrders), icon: TrendingUp },
+    { label: "Low Stock Alert Items", value: String(lowStockCount), icon: AlertTriangle },
   ];
 
   const paymentData = [
-    { name: "Cash", value: stats?.cashPayments ?? 0 },
-    { name: "Online", value: stats?.onlinePayments ?? 0 },
-  ];
+    { name: "Cash", value: cashPayments },
+    { name: "Online", value: onlinePayments },
+    { name: "Card", value: cardPayments },
+  ].filter(p => p.value > 0);
+
+  // If no payment data exists, show dummy/empty structure
+  const displayPaymentData = paymentData.length > 0 ? paymentData : [{ name: "No Sales", value: 1 }];
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold">Dashboard</h1>
-      <p className="text-muted-foreground">Live overview — Rush Pizza & Burger</p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Dashboard Overview</h1>
+          <p className="text-sm text-muted-foreground">Select a calendar date to view complete statistics and analytics.</p>
+        </div>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-850"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((c) => (
-          <Card key={c.label}>
+          <Card key={c.label} className="shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{c.label}</CardTitle>
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{c.label}</CardTitle>
               <c.icon className="h-5 w-5 text-primary" />
             </CardHeader>
-            <CardContent><p className="text-2xl font-bold">{c.value}</p></CardContent>
+            <CardContent><p className="text-2xl font-black">{c.value}</p></CardContent>
           </Card>
         ))}
       </div>
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Revenue by Hour</CardTitle></CardHeader>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="shadow-sm">
+          <CardHeader><CardTitle className="text-base font-bold">Revenue by Hour</CardTitle></CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hourData}>
@@ -78,20 +133,21 @@ export default function AdminDashboardPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Payments Today</CardTitle></CardHeader>
+        <Card className="shadow-sm">
+          <CardHeader><CardTitle className="text-base font-bold">Payments Breakdown</CardTitle></CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={paymentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                  {paymentData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                <Pie data={displayPaymentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  {displayPaymentData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip formatter={(v: number) => typeof v === "number" ? formatCurrency(v) : v} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
+
       {showRider && (
         <section className="mt-12">
           <RiderDashboard />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { subscribeOrders } from "@/services/orders.service";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -10,18 +11,27 @@ import { canViewOrders, ordersFilterForUser } from "@/lib/permissions";
 import type { Order } from "@/types";
 import { OrderListSkeleton } from "@/components/ui/loading-skeletons";
 
-export default function AdminOrdersPage() {
+function AdminOrdersContent() {
   const profile = useAuthStore((s) => s.profile);
+  const searchParams = useSearchParams();
+  const filter = ordersFilterForUser(profile);
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Set tab dynamically based on URL parameter (?tab=pending)
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
-  const filter = ordersFilterForUser(profile);
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   });
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    setActiveTab(tabParam === "pending" ? "pending" : "all");
+  }, [searchParams]);
 
   useEffect(() => {
     if (filter === "none") {
@@ -75,14 +85,14 @@ export default function AdminOrdersPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Orders</h1>
-          <p className="text-sm text-muted-foreground">{allCount} total for this date</p>
+          <h1 className="text-2xl font-bold">{activeTab === "pending" ? "Pending Orders" : "All Orders"}</h1>
+          <p className="text-sm text-muted-foreground">{activeTab === "pending" ? `${pendingCount} pending` : `${allCount} total`} for this date</p>
         </div>
         <input
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="rounded-md border bg-background px-3 py-1.5 text-sm"
+          className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-800"
         />
       </div>
 
@@ -117,10 +127,10 @@ export default function AdminOrdersPage() {
           <div key={o.id} className="rounded-xl border bg-card p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="font-bold text-lg">
+                <p className="font-bold text-lg text-stone-900">
                   Order #{o.dailyOrderNumber ?? o.orderNumber}
                 </p>
-                <p className="text-sm">
+                <p className="text-sm text-stone-700">
                   {o.customerName} · {o.customerPhone}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -141,12 +151,12 @@ export default function AdminOrdersPage() {
               {o.items.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center justify-between gap-4 px-3 py-2"
+                  className="flex items-center justify-between gap-4 px-3 py-2 text-stone-850 font-medium"
                 >
                   <span>
-                    <span className="font-bold">{item.quantity}×</span> {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
+                    <span className="font-bold text-stone-900">{item.quantity}×</span> {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
                   </span>
-                  <span className="shrink-0 font-medium">
+                  <span className="shrink-0 font-bold text-stone-900">
                     {formatCurrency(item.subtotal)}
                   </span>
                 </li>
@@ -159,5 +169,13 @@ export default function AdminOrdersPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AdminOrdersPage() {
+  return (
+    <Suspense fallback={<div>Loading orders dashboard...</div>}>
+      <AdminOrdersContent />
+    </Suspense>
   );
 }

@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { usePOSStore } from "@/stores/pos-store";
 import { subscribeMenuItems, getActiveCategories } from "@/services/menu.service";
 import type { CreateOrderInput } from "@/services/orders.service";
-import { preloadPrintHeader, printPosDocuments } from "@/lib/print";
+import { preloadPrintHeader, printPosDocuments, printKOT } from "@/lib/print";
 import { buildInstantPosOrder } from "@/lib/pos-instant";
 import { startPosSyncWorker } from "@/services/pos-sync.service";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -225,8 +225,8 @@ export default function POSPage() {
     setCity("Sheikhupura");
     setPaying(false);
     setShowCartMobile(false);
-    toast.success(`Order #${num} — printing`);
-    requestAnimationFrame(() => void printPosDocuments(order));
+    toast.success(`Order #${num} sent to Kitchen — printing KOT`);
+    requestAnimationFrame(() => void printKOT(order));
   }, [
     paying,
     items,
@@ -338,51 +338,28 @@ export default function POSPage() {
               onChange={(e) => setCity(e.target.value)}
             />
           </div>
-        )}
-
-        {/* Dine-in Table selections with dialpad */}
+        )}        {/* Dine-in Table selections with dialpad */}
         {orderType === "dine_in" && (
-          <div className="relative mt-2">
-            <Utensils className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <button
-              type="button"
-              onClick={() => setShowDialpad(true)}
-              className="h-11 w-full rounded-xl border border-stone-200 bg-white pl-9 text-left text-sm font-semibold flex items-center"
-            >
-              {tableNumber != null ? `Table #${tableNumber}` : "Select Table No."}
-            </button>
+          <div className="mt-3 border-t pt-3 border-stone-100 space-y-2">
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
+              <Utensils className="h-3.5 w-3.5" /> Selected Table: {tableNumber != null ? `#${tableNumber}` : "None"}
+            </p>
+            {/* Visual Numerical Dialpad inline */}
+            <div className="grid grid-cols-3 gap-1.5 bg-stone-50/50 p-2 rounded-2xl border border-stone-100">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => handleDialpadPress(k)}
+                  className="flex h-10 items-center justify-center rounded-xl bg-white text-sm font-black text-stone-800 shadow-sm active:scale-95 border border-stone-100/50"
+                >
+                  {k === "back" ? "⌫" : k}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Table Dialpad Overlay */}
-      {showDialpad && (
-        <div className="absolute inset-x-0 bottom-0 z-50 rounded-t-3xl border-t bg-stone-50 p-4 shadow-2xl">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-sm font-black text-stone-600">Dine-in Table Selector</span>
-            <button
-              type="button"
-              onClick={() => setShowDialpad(false)}
-              className="text-xs font-bold text-primary hover:underline bg-stone-200/50 px-3 py-1 rounded-full"
-            >
-              Done
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => handleDialpadPress(k)}
-                className="flex h-12 items-center justify-center rounded-xl bg-white text-lg font-black text-stone-800 shadow-sm active:scale-95"
-              >
-                {k === "back" ? "⌫" : k}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Cart list */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {items.length === 0 ? (

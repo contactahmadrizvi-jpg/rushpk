@@ -395,7 +395,7 @@ export default function AdminInventoryPage() {
                           size="sm"
                           variant="secondary"
                           onClick={() =>
-                            adjustStock(item.id, 10, "purchase", "Quick Add +10", profile?.name || "admin")
+                            adjustStock(item.id, 10, "purchase", "Quick Add +10", profile?.displayName || "admin")
                           }
                         >
                           +10

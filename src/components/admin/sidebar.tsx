@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -19,10 +19,12 @@ import { cn } from "@/lib/utils";
 import { RESTAURANT } from "@/constants";
 import { useAuthStore } from "@/stores/auth-store";
 import { userHasPermission } from "@/lib/permissions";
+import { Suspense } from "react";
 
 const nav = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard", perm: "dashboard" },
-  { href: "/admin/orders", icon: ShoppingBag, label: "Orders", perm: "orders" },
+  { href: "/admin/orders", icon: ShoppingBag, label: "All Orders", perm: "orders", key: "all-orders" },
+  { href: "/admin/orders?tab=pending", icon: Clock, label: "Pending Orders", perm: "orders", key: "pending-orders" },
   { href: "/admin/menu", icon: UtensilsCrossed, label: "Menu", perm: "menu" },
   { href: "/admin/inventory", icon: Package, label: "Inventory", perm: "inventory" },
   { href: "/admin/employees", icon: Users, label: "Employees", perm: "employees" },
@@ -33,9 +35,11 @@ const nav = [
   { href: "/admin/settings", icon: Settings, label: "Settings", perm: "settings" },
 ];
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinksContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const profile = useAuthStore((s) => s.profile);
+  const currentTab = searchParams.get("tab");
 
   const visible = nav.filter((item) => {
     if (item.perm === "orders") {
@@ -55,21 +59,38 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex-1 space-y-1 p-4">
-      {visible.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={onNavigate}
-          className={cn(
-            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent",
-            pathname === item.href && "bg-primary text-primary-foreground hover:bg-primary/90"
-          )}
-        >
-          <item.icon className="h-5 w-5" />
-          {item.label}
-        </Link>
-      ))}
+      {visible.map((item) => {
+        let active = pathname === item.href;
+        if (item.key === "pending-orders") {
+          active = pathname === "/admin/orders" && currentTab === "pending";
+        } else if (item.key === "all-orders") {
+          active = pathname === "/admin/orders" && currentTab !== "pending";
+        }
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent",
+              active && "bg-primary text-primary-foreground hover:bg-primary/90"
+            )}
+          >
+            <item.icon className="h-5 w-5" />
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
+  );
+}
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Loading navigation...</div>}>
+      <NavLinksContent onNavigate={onNavigate} />
+    </Suspense>
   );
 }
 
