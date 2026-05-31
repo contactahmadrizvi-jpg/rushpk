@@ -130,6 +130,8 @@ export default function POSPage() {
     };
   }, [profile, router, setCustomer]);
 
+  const subtotal = getSubtotal();
+
   // Sync discount amount based on subtotal and discount percentage
   useEffect(() => {
     const discountVal = Math.round((subtotal * discountPercent) / 100);
@@ -154,7 +156,6 @@ export default function POSPage() {
     return list;
   }, [menu, activeCategory, search]);
 
-  const subtotal = getSubtotal();
   const total = subtotal - discount;
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
 
