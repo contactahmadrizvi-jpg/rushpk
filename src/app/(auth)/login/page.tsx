@@ -26,9 +26,17 @@ function LoginForm() {
 
   useEffect(() => {
     if (loading) return;
-    if (firebaseUser && profile && isAdminRole(profile.role)) {
-      const home = getStaffHomeRoute(profile);
-      router.replace(redirect.startsWith("/admin") || redirect === "/pos" ? redirect : home);
+    if (firebaseUser && profile) {
+      if (profile.role === "employee") {
+        const { logout } = useAuthStore.getState();
+        logout();
+        toast.error("Employees are not allowed to log into the admin panel.");
+        return;
+      }
+      if (isAdminRole(profile.role)) {
+        const home = getStaffHomeRoute(profile);
+        router.replace(redirect.startsWith("/admin") || redirect === "/pos" ? redirect : home);
+      }
     }
   }, [loading, firebaseUser, profile, router, redirect]);
 
@@ -49,6 +57,13 @@ function LoginForm() {
         toast.error(
           "Logged in, but no Firestore user profile. Add users/{uid} with role super_admin in Firebase."
         );
+        return;
+      }
+
+      if (profile.role === "employee") {
+        toast.error("Employees are not allowed to log into the admin panel.");
+        const { logout } = useAuthStore.getState();
+        await logout();
         return;
       }
 

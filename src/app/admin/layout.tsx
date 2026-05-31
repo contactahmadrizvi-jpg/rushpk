@@ -61,16 +61,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!profile) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-        <h1 className="text-xl font-bold">Profile required</h1>
+         <h1 className="text-xl font-bold">Profile required</h1>
+         <p className="max-w-md text-muted-foreground">
+           Signed in as <strong>{firebaseUser.email}</strong>. Create Firestore document{" "}
+           <code>users/{firebaseUser.uid}</code> with role <code>admin</code> or{" "}
+           <code>super_admin</code>.
+         </p>
+         <Button onClick={() => refreshProfile()}>Retry</Button>
+         <Link href="/login" className="text-sm text-primary hover:underline">
+           Back to login
+         </Link>
+      </div>
+    );
+  }
+
+  if (profile.role === "employee") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
         <p className="max-w-md text-muted-foreground">
-          Signed in as <strong>{firebaseUser.email}</strong>. Create Firestore document{" "}
-          <code>users/{firebaseUser.uid}</code> with role <code>admin</code> or{" "}
-          <code>super_admin</code>.
+          Signed in as <strong>{profile.email || firebaseUser.email}</strong> ({profile.displayName}).
+          Employees are not authorized to access the admin area. Please use an authorized staff account.
         </p>
-        <Button onClick={() => refreshProfile()}>Retry</Button>
-        <Link href="/login" className="text-sm text-primary hover:underline">
-          Back to login
-        </Link>
+        <div className="flex gap-4">
+          <Button variant="destructive" onClick={async () => {
+            await useAuthStore.getState().logout();
+            router.push("/login");
+          }}>
+            Log Out & Go to Login
+          </Button>
+          <Link href="/home" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2">
+            Go to Website
+          </Link>
+        </div>
       </div>
     );
   }
