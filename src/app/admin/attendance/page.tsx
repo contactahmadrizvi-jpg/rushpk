@@ -1,23 +1,44 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ShieldAlert, Sparkles, Camera, RefreshCw, UserCheck } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  UserCheck,
+  UserX,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/stores/auth-store";
-import { checkInGPS, checkOut, attendanceRepo } from "@/services/attendance.service";
-import type { AttendanceRecord, AppUser } from "@/types";
-import { isSuperAdmin, userHasPermission } from "@/lib/permissions";
+import { attendanceRepo, checkInGPS, checkOut } from "@/services/attendance.service";
+import { listStaffUsers } from "@/services/users.service";
 import { where } from "@/services/base.repository";
+import type { AttendanceRecord, AppUser } from "@/types";
 import { doc, updateDoc } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase/config";
 import { COLLECTIONS } from "@/constants";
-import { listStaffUsers } from "@/services/users.service";
+import { isSuperAdmin, userHasPermission } from "@/lib/permissions";
 
-const MODEL_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/";
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+const MODEL_URL =
+  "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/";
+const FACE_API_CDN =
+  "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
+const MATCH_THRESHOLD = 0.5; // lower = stricter
+const DETECT_INTERVAL_MS = 500;
+const RESTAURANT_LAT = 31.7131;
+const RESTAURANT_LNG = 73.9724;
 
+// ---------------------------------------------------------------------------
+// Audio chime helper
+// ---------------------------------------------------------------------------
 function playChime() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -26,54 +47,57 @@ function playChime() {
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+    osc.frequency.setValueAtTime(523, ctx.currentTime);
+    osc.frequency.setValueAtTime(784, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.35);
-  } catch (e) {
-    console.error(e);
-  }
+    osc.stop(ctx.currentTime + 0.4);
+  } catch (_) {}
 }
 
+// ---------------------------------------------------------------------------
+// Loading state type
+// ---------------------------------------------------------------------------
+type Status =
+  | "idle"
+  | "loading_script"
+  | "loading_models"
+  | "loading_profiles"
+  | "ready"
+  | "error";
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function AttendancePage() {
   const { profile, refreshProfile } = useAuthStore();
+
+  // ---------- kiosk state ----------
+  const [status, setStatus] = useState<Status>("idle");
+  const [statusMsg, setStatusMsg] = useState("");
+  const [cameraOn, setCameraOn] = useState(false);
+  const [faceLabel, setFaceLabel] = useState<string | null>(null); // null = no face
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollCapturing, setEnrollCapturing] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+
+  // ---------- attendance logs ----------
   const [logs, setLogs] = useState<AttendanceRecord[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-
-  // Face Kiosk states
-  const [faceApiLoaded, setFaceApiLoaded] = useState(false);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraError, setCameraError] = useState("");
-  
-  // Multi-employee profiles states
-  const [staffList, setStaffList] = useState<AppUser[]>([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
-  const [profileLoadingProgress, setProfileLoadingProgress] = useState("");
-  const [faceMatcher, setFaceMatcher] = useState<any>(null);
-
-  // Status & Match outputs
-  const [faceDetected, setFaceDetected] = useState(false);
-  const [activeMatchName, setActiveMatchName] = useState("");
-  const [checkingInId, setCheckingInId] = useState<string | null>(null);
-
-  // Enrollment Modal states
-  const [enrollModalOpen, setEnrollModalOpen] = useState(false);
-  const [registeringFace, setRegisteringFace] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const enrollVideoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const enrollStreamRef = useRef<MediaStream | null>(null);
-  const recognitionIntervalRef = useRef<number | null>(null);
-  
-  // Cooldown mapping to prevent multi-submissions
-  const checkedInTodaySet = useRef<Set<string>>(new Set());
-
+  const [logsLoading, setLogsLoading] = useState(false);
   const today = new Date().toISOString().split("T")[0]!;
 
+  // ---------- refs ----------
+  const kioskVideoRef = useRef<HTMLVideoElement>(null);
+  const enrollVideoRef = useRef<HTMLVideoElement>(null);
+  const kioskStreamRef = useRef<MediaStream | null>(null);
+  const enrollStreamRef = useRef<MediaStream | null>(null);
+  const faceMatcherRef = useRef<any>(null);
+  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkedTodayRef = useRef<Set<string>>(new Set());
+  const processingRef = useRef(false);
+
+  // ---------- derived ----------
   const canMonitor =
     isSuperAdmin(profile) ||
     userHasPermission(profile, "dashboard") ||
@@ -81,322 +105,323 @@ export default function AttendancePage() {
     profile?.role === "manager" ||
     profile?.role === "admin";
 
+  // =========================================================================
+  // Load logs
+  // =========================================================================
   const loadLogs = async () => {
-    setLoadingLogs(true);
+    setLogsLoading(true);
     try {
-      const records = await attendanceRepo.getAll([
-        where("date", "==", today),
-      ]);
+      const records = await attendanceRepo.getAll([where("date", "==", today)]);
       setLogs(records);
-      
-      // Populate checked-in users to prevent duplicate submissions
-      const checkedIds = new Set(records.map(r => r.employeeId));
-      checkedInTodaySet.current = checkedIds;
-    } catch (e) {
-      console.error(e);
+      checkedTodayRef.current = new Set(records.map((r) => r.employeeId));
     } finally {
-      setLoadingLogs(false);
+      setLogsLoading(false);
     }
   };
 
   useEffect(() => {
     loadLogs();
-  }, [profile]);
-
-  // Load face-api.js from CDN dynamically to avoid Next.js build errors
-  useEffect(() => {
-    let active = true;
-    const loadScript = async () => {
-      if ((window as any).faceapi) {
-        if (active) setFaceApiLoaded(true);
-        return;
-      }
-      return new Promise<void>((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
-        script.async = true;
-        script.onload = () => {
-          if (active) setFaceApiLoaded(true);
-          resolve();
-        };
-        script.onerror = (e) => reject(e);
-        document.body.appendChild(script);
-      });
-    };
-
-    loadScript().catch((err) => console.error("Failed to load face-api script:", err));
-
-    return () => {
-      active = false;
-      stopCamera();
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load models once script is ready
+  // =========================================================================
+  // Bootstrap face-api (script → models → staff descriptors)
+  // =========================================================================
   useEffect(() => {
-    if (!faceApiLoaded) return;
-    let active = true;
+    let cancelled = false;
 
-    const loadModels = async () => {
-      try {
-        const fa = (window as any).faceapi;
+    const bootstrap = async () => {
+      // 1. Load script
+      if (!(window as any).faceapi) {
+        setStatus("loading_script");
+        setStatusMsg("Downloading face-api.js…");
+        await new Promise<void>((res, rej) => {
+          const s = document.createElement("script");
+          s.src = FACE_API_CDN;
+          s.async = true;
+          s.onload = () => res();
+          s.onerror = () => rej(new Error("Script load failed"));
+          document.head.appendChild(s);
+        });
+      }
+      if (cancelled) return;
+
+      // 2. Load neural network weights
+      const fa = (window as any).faceapi;
+      if (!fa.nets.tinyFaceDetector.isLoaded) {
+        setStatus("loading_models");
+        setStatusMsg("Loading neural network weights…");
         await Promise.all([
           fa.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           fa.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           fa.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
-        if (active) {
-          setModelsLoaded(true);
-          loadStaffAndDescriptors();
-        }
-      } catch (err) {
-        console.error("Failed to load face-api models:", err);
       }
-    };
+      if (cancelled) return;
 
-    loadModels();
-    return () => {
-      active = false;
-    };
-  }, [faceApiLoaded]);
-
-  const loadStaffAndDescriptors = async () => {
-    setLoadingProfiles(true);
-    setProfileLoadingProgress("Loading employee profiles...");
-    try {
+      // 3. Build face matcher from staff profiles
+      setStatus("loading_profiles");
+      setStatusMsg("Building employee face index…");
       const staff = await listStaffUsers();
-      setStaffList(staff);
-      
-      const fa = (window as any).faceapi;
-      const labeledDescriptors: any[] = [];
-      
-      const staffWithPhotos = staff.filter(s => s.photoURL);
-      let count = 0;
-      
-      for (const emp of staffWithPhotos) {
-        setProfileLoadingProgress(`Loading face profile: ${emp.displayName} (${++count}/${staffWithPhotos.length})`);
+      const labeled: any[] = [];
+
+      for (const emp of staff.filter((s) => s.photoURL)) {
         try {
-          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const tempImg = new Image();
-            tempImg.crossOrigin = "anonymous";
-            tempImg.src = emp.photoURL!;
-            tempImg.onload = () => resolve(tempImg);
-            tempImg.onerror = (e) => reject(e);
-          });
-          
-          const detection = await fa.detectSingleFace(img, new fa.TinyFaceDetectorOptions())
+          const img = await loadImage(emp.photoURL!);
+          const det = await fa
+            .detectSingleFace(img, new fa.TinyFaceDetectorOptions({ inputSize: 224 }))
             .withFaceLandmarks()
             .withFaceDescriptor();
-            
-          if (detection) {
-            labeledDescriptors.push(
-              new fa.LabeledFaceDescriptors(emp.id, [detection.descriptor])
-            );
+          if (det) {
+            labeled.push(new fa.LabeledFaceDescriptors(emp.id, [det.descriptor]));
           }
-        } catch (err) {
-          console.warn(`Could not extract descriptor for ${emp.displayName}:`, err);
+        } catch (_) {
+          // skip employee if image fails
         }
       }
-      
-      if (labeledDescriptors.length > 0) {
-        const matcher = new fa.FaceMatcher(labeledDescriptors, 0.5);
-        setFaceMatcher(matcher);
-        console.log("Face matcher loaded successfully with", labeledDescriptors.length, "profiles.");
+
+      if (labeled.length > 0) {
+        faceMatcherRef.current = new fa.FaceMatcher(labeled, MATCH_THRESHOLD);
       }
-    } catch (e) {
-      console.error("Error loading staff descriptors:", e);
-    } finally {
-      setLoadingProfiles(false);
-    }
-  };
 
-  const startCamera = async () => {
-    setCameraError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" },
-      });
-      streamRef.current = stream;
-      setCameraActive(true);
+      if (!cancelled) {
+        setStatus("ready");
+        setStatusMsg(
+          labeled.length === 0
+            ? "No enrolled faces found. Use 'Enroll Face Profile' first."
+            : `Ready — ${labeled.length} employee face(s) indexed.`
+        );
+      }
+    };
 
-      const bind = () => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        } else {
-          setTimeout(bind, 50);
-        }
-      };
-      bind();
-    } catch (err) {
-      console.error(err);
-      setCameraError("Unable to access camera. Please check permissions.");
-    }
-  };
+    bootstrap().catch((err) => {
+      if (!cancelled) {
+        setStatus("error");
+        setStatusMsg(String(err?.message ?? err));
+      }
+    });
 
-  const stopCamera = () => {
-    if (recognitionIntervalRef.current) {
-      window.clearInterval(recognitionIntervalRef.current);
-      recognitionIntervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setCameraActive(false);
-    setFaceDetected(false);
-    setActiveMatchName("");
-  };
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Live face detection & multi-employee matching kiosk loop
+  // =========================================================================
+  // Bind stream to kiosk video element whenever cameraOn changes
+  // =========================================================================
   useEffect(() => {
-    if (cameraActive && modelsLoaded && videoRef.current && faceMatcher && !enrollModalOpen) {
-      const fa = (window as any).faceapi;
-      
-      const detectFaceKiosk = async () => {
-        if (!videoRef.current || videoRef.current.paused || videoRef.current.ended) return;
-        
-        try {
-          const detection = await fa.detectSingleFace(
-            videoRef.current,
+    if (cameraOn && kioskStreamRef.current && kioskVideoRef.current) {
+      kioskVideoRef.current.srcObject = kioskStreamRef.current;
+    }
+  }, [cameraOn]);
+
+  // =========================================================================
+  // Face detection ticker (runs while kiosk camera is on)
+  // =========================================================================
+  useEffect(() => {
+    if (!cameraOn || status !== "ready") return;
+
+    const fa = (window as any).faceapi;
+
+    const tick = async () => {
+      const video = kioskVideoRef.current;
+      if (!video || video.readyState < 2 || processingRef.current) return;
+
+      try {
+        processingRef.current = true;
+        const det = await fa
+          .detectSingleFace(
+            video,
             new fa.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
           )
-            .withFaceLandmarks()
-            .withFaceDescriptor();
+          .withFaceLandmarks()
+          .withFaceDescriptor();
 
-          if (detection) {
-            setFaceDetected(true);
-            const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
-            
-            if (bestMatch.label !== "unknown") {
-              const empId = bestMatch.label;
-              const matchedEmp = staffList.find(s => s.id === empId);
-              
-              if (matchedEmp) {
-                setActiveMatchName(matchedEmp.displayName);
-                
-                // Trigger check-in if not checked in already today and not currently submitting
-                if (!checkedInTodaySet.current.has(empId) && checkingInId !== empId) {
-                  setCheckingInId(empId);
-                  playChime();
-                  toast.info(`Match found: ${matchedEmp.displayName}. Clocking in...`);
-                  
-                  // Submit attendance automatically with restaurant kiosk coordinates
-                  try {
-                    await checkInGPS(
-                      matchedEmp.id,
-                      matchedEmp.displayName,
-                      31.7131, // Store default latitude
-                      73.9724, // Store default longitude
-                      "11:00"
-                    );
-                    toast.success(`Success! ${matchedEmp.displayName} checked in.`);
-                    await loadLogs();
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Check-in failed");
-                  } finally {
-                    setCheckingInId(null);
-                  }
-                }
-              }
-            } else {
-              setActiveMatchName("Unknown Face");
-            }
-          } else {
-            setFaceDetected(false);
-            setActiveMatchName("");
-          }
-        } catch (e) {
-          console.error("Kiosk loop error:", e);
+        if (!det) {
+          setFaceLabel(null);
+          return;
         }
-      };
 
-      recognitionIntervalRef.current = window.setInterval(detectFaceKiosk, 400);
-    }
+        if (!faceMatcherRef.current) {
+          setFaceLabel("no_index");
+          return;
+        }
 
-    return () => {
-      if (recognitionIntervalRef.current) {
-        window.clearInterval(recognitionIntervalRef.current);
-        recognitionIntervalRef.current = null;
+        const best = faceMatcherRef.current.findBestMatch(det.descriptor);
+
+        if (best.label === "unknown") {
+          setFaceLabel("unknown");
+          return;
+        }
+
+        const staffList = await listStaffUsers();
+        const matched = staffList.find((s) => s.id === best.label);
+        if (!matched) return;
+
+        setFaceLabel(matched.displayName);
+
+        // Auto clock-in (once per day)
+        if (
+          !checkedTodayRef.current.has(matched.id) &&
+          !processingRef.current
+        ) {
+          processingRef.current = true;
+          playChime();
+          toast.info(`Recognized: ${matched.displayName} — clocking in…`);
+          try {
+            await checkInGPS(
+              matched.id,
+              matched.displayName,
+              RESTAURANT_LAT,
+              RESTAURANT_LNG,
+              "11:00"
+            );
+            toast.success(`✅ ${matched.displayName} checked in!`);
+            await loadLogs();
+          } catch (e) {
+            toast.error(
+              e instanceof Error ? e.message : "Check-in error"
+            );
+          }
+        }
+      } finally {
+        processingRef.current = false;
       }
     };
-  }, [cameraActive, modelsLoaded, faceMatcher, staffList, checkingInId, enrollModalOpen]);
 
-  const startEnrollCamera = async () => {
+    tickerRef.current = setInterval(tick, DETECT_INTERVAL_MS);
+    return () => {
+      if (tickerRef.current) clearInterval(tickerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOn, status]);
+
+  // =========================================================================
+  // Camera controls
+  // =========================================================================
+  const startKiosk = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
+      });
+      kioskStreamRef.current = stream;
+      setCameraOn(true);
+      // binding happens in useEffect above
+    } catch (err) {
+      toast.error("Camera permission denied or unavailable.");
+    }
+  };
+
+  const stopKiosk = () => {
+    if (tickerRef.current) clearInterval(tickerRef.current);
+    kioskStreamRef.current?.getTracks().forEach((t) => t.stop());
+    kioskStreamRef.current = null;
+    if (kioskVideoRef.current) kioskVideoRef.current.srcObject = null;
+    setCameraOn(false);
+    setFaceLabel(null);
+  };
+
+  // =========================================================================
+  // Enroll camera controls
+  // =========================================================================
+  const openEnroll = async () => {
+    setEnrollOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
       });
       enrollStreamRef.current = stream;
-
-      const bind = () => {
-        if (enrollVideoRef.current) {
-          enrollVideoRef.current.srcObject = stream;
-        } else {
-          setTimeout(bind, 50);
-        }
-      };
-      bind();
-    } catch (err) {
-      toast.error("Unable to access webcam for enrollment.");
+      // Wait one tick for the video element to render
+      await new Promise((r) => setTimeout(r, 80));
+      if (enrollVideoRef.current) {
+        enrollVideoRef.current.srcObject = stream;
+      }
+    } catch {
+      toast.error("Cannot access camera for enrollment.");
     }
   };
 
-  const stopEnrollCamera = () => {
-    if (enrollStreamRef.current) {
-      enrollStreamRef.current.getTracks().forEach((track) => track.stop());
-      enrollStreamRef.current = null;
-    }
+  const closeEnroll = () => {
+    enrollStreamRef.current?.getTracks().forEach((t) => t.stop());
+    enrollStreamRef.current = null;
+    if (enrollVideoRef.current) enrollVideoRef.current.srcObject = null;
+    setEnrollOpen(false);
   };
 
-  const handleRegisterFace = async () => {
-    if (!enrollVideoRef.current || !profile) return;
-    setRegisteringFace(true);
-    
+  const captureAndEnroll = async () => {
+    if (!profile || !enrollVideoRef.current) return;
+    const fa = (window as any).faceapi;
+    if (!fa) return;
+
+    setEnrollCapturing(true);
     try {
-      const fa = (window as any).faceapi;
-      const detection = await fa.detectSingleFace(enrollVideoRef.current, new fa.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detection) {
-        toast.error("No face detected! Please position yourself clearly and try again.");
-        setRegisteringFace(false);
+      const video = enrollVideoRef.current;
+      if (video.readyState < 2) {
+        toast.error("Camera not ready yet. Please wait a moment.");
         return;
       }
 
-      // Draw frame to canvas
-      const canvas = document.createElement("canvas");
-      canvas.width = enrollVideoRef.current.videoWidth;
-      canvas.height = enrollVideoRef.current.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(enrollVideoRef.current, 0, 0, canvas.width, canvas.height);
-      }
-      const base64Image = canvas.toDataURL("image/jpeg", 0.85);
+      const det = await fa
+        .detectSingleFace(video, new fa.TinyFaceDetectorOptions({ inputSize: 224 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
 
+      if (!det) {
+        toast.error("No face detected. Please look directly at the camera.");
+        return;
+      }
+
+      // Snapshot
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")?.drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+      // Save to Firestore
       await updateDoc(doc(getFirestoreDb(), COLLECTIONS.users, profile.id), {
-        photoURL: base64Image,
+        photoURL: dataUrl,
         updatedAt: new Date().toISOString(),
       });
 
       await refreshProfile();
-      toast.success("Face template enrolled successfully!");
-      setEnrollModalOpen(false);
-      stopEnrollCamera();
-      
-      // Reload descriptors list to include the newly added face
-      loadStaffAndDescriptors();
+      toast.success("Face profile enrolled! Reloading recognition index…");
+      closeEnroll();
+
+      // Reload matcher
+      setStatus("loading_profiles");
+      setStatusMsg("Rebuilding employee face index…");
+      const staff = await listStaffUsers();
+      const labeled: any[] = [];
+      for (const emp of staff.filter((s) => s.photoURL)) {
+        try {
+          const img = await loadImage(emp.photoURL!);
+          const d = await fa
+            .detectSingleFace(img, new fa.TinyFaceDetectorOptions({ inputSize: 224 }))
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+          if (d) labeled.push(new fa.LabeledFaceDescriptors(emp.id, [d.descriptor]));
+        } catch (_) {}
+      }
+      faceMatcherRef.current = labeled.length > 0 ? new fa.FaceMatcher(labeled, MATCH_THRESHOLD) : null;
+      setStatus("ready");
+      setStatusMsg(`Ready — ${labeled.length} employee face(s) indexed.`);
     } catch (err) {
-      console.error(err);
-      toast.error("Enrollment failed. Try again.");
+      toast.error("Enrollment failed. Please try again.");
     } finally {
-      setRegisteringFace(false);
+      setEnrollCapturing(false);
     }
   };
 
-  const handleManualCheckOut = async () => {
+  // =========================================================================
+  // Check-out
+  // =========================================================================
+  const handleCheckOut = async () => {
     if (!profile) return;
-    setCheckingInId("checkout");
+    setCheckingOut(true);
     try {
       await checkOut(profile.id);
       toast.success("Checked out successfully!");
@@ -404,172 +429,217 @@ export default function AttendancePage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Check-out failed");
     } finally {
-      setCheckingInId(null);
+      setCheckingOut(false);
     }
   };
 
+  // =========================================================================
+  // Render helpers
+  // =========================================================================
+  const isLoading = ["loading_script", "loading_models", "loading_profiles"].includes(status);
+
+  const faceStatusColor =
+    faceLabel === null
+      ? "border-white/20"
+      : faceLabel === "unknown" || faceLabel === "no_index"
+      ? "border-amber-400"
+      : "border-emerald-400 animate-pulse";
+
+  const faceStatusText =
+    faceLabel === null
+      ? "Position your face in the circle"
+      : faceLabel === "unknown"
+      ? "Unknown face — not registered"
+      : faceLabel === "no_index"
+      ? "No faces enrolled yet"
+      : `Recognised: ${faceLabel}`;
+
+  // =========================================================================
+  // JSX
+  // =========================================================================
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div className="mx-auto max-w-3xl space-y-5 p-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-stone-900">Facial Attendance System</h1>
-          <p className="text-stone-400 text-xs mt-0.5">
-            Automatic kiosk detection: Stand in front of the camera to verify your identity and clock in.
+          <h1 className="text-xl font-black tracking-tight">Facial Attendance</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Stand in front of the camera — attendance is recorded automatically.
           </p>
         </div>
         <div className="flex gap-2">
-          {profile && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 text-xs font-bold rounded-xl border-stone-200"
-              onClick={() => {
-                stopCamera();
-                setEnrollModalOpen(true);
-                startEnrollCamera();
-              }}
-            >
-              Enroll Face Profile
-            </Button>
-          )}
-          {profile && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 text-xs font-bold text-red-500 hover:bg-red-50 hover:text-red-600 border-red-100 rounded-xl"
-              onClick={handleManualCheckOut}
-            >
-              Check Out
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 rounded-xl text-xs font-bold"
+            onClick={openEnroll}
+            disabled={status !== "ready"}
+          >
+            Enroll Face Profile
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 rounded-xl text-xs font-bold text-red-500 border-red-200 hover:bg-red-50"
+            onClick={handleCheckOut}
+            disabled={checkingOut}
+          >
+            {checkingOut ? "…" : "Check Out"}
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-12">
-        {/* Face Recognition Terminal */}
-        <Card className="md:col-span-12 overflow-hidden border-stone-100 shadow-sm rounded-2xl bg-white">
-          <CardHeader className="border-b pb-4">
-            <CardTitle className="text-base font-black flex items-center gap-2">
-              <Camera className="h-4.5 w-4.5 text-primary" />
-              AI Attendance Kiosk
-            </CardTitle>
-            <CardDescription className="text-xs">
-              System identifies employees automatically from preloaded face profiles.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            {!modelsLoaded || loadingProfiles ? (
-              <div className="py-16 text-center text-stone-400 space-y-3">
-                <RefreshCw className="h-8 w-8 mx-auto animate-spin text-primary" />
-                <p className="text-xs font-bold text-stone-700">{profileLoadingProgress || "Loading face matching models..."}</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center space-y-4">
-                <div className="relative w-full max-w-lg aspect-video rounded-3xl bg-stone-950 border overflow-hidden flex items-center justify-center shadow-inner">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover scale-x-[-1] ${cameraActive ? "block" : "hidden"}`}
-                  />
-                  {cameraActive ? (
-                    <>
-                      {/* Interactive Target Circle overlay */}
-                      <div className={`absolute inset-10 border-4 border-dashed rounded-full pointer-events-none transition duration-300 ${
-                        faceDetected
-                          ? activeMatchName && activeMatchName !== "Unknown Face"
-                            ? "border-emerald-500 bg-emerald-500/5 animate-pulse"
-                            : "border-amber-500 bg-amber-500/5"
-                          : "border-stone-500/40"
-                      }`} />
+      {/* Kiosk Card */}
+      <Card className="overflow-hidden rounded-2xl border-stone-100 shadow-sm">
+        <CardHeader className="border-b pb-3">
+          <CardTitle className="text-sm font-black flex items-center gap-2">
+            <Camera className="h-4 w-4 text-primary" />
+            AI Attendance Kiosk
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {isLoading ? statusMsg : status === "error" ? `Error: ${statusMsg}` : statusMsg}
+          </CardDescription>
+        </CardHeader>
 
-                      <div className="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[10px] px-3 py-1.5 rounded-full font-black uppercase tracking-wider">
-                        Kiosk Active
-                      </div>
+        <CardContent className="flex flex-col items-center gap-4 pt-6 pb-6">
+          {/* Loading/Error state */}
+          {(isLoading || status === "error") && (
+            <div className="flex flex-col items-center gap-2 py-10">
+              {isLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              ) : (
+                <ShieldAlert className="h-8 w-8 text-destructive" />
+              )}
+              <p className="text-xs text-muted-foreground max-w-xs text-center">{statusMsg}</p>
+            </div>
+          )}
 
-                      <div className="absolute bottom-4 left-4 bg-black/75 backdrop-blur text-white text-xs px-4 py-2 rounded-xl font-bold border border-white/10">
-                        {faceDetected
-                          ? activeMatchName === "Unknown Face"
-                            ? "Face Detected (Unknown)"
-                            : `Recognized: ${activeMatchName}`
-                          : "Position your face inside the target area"}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center text-stone-500 p-8 space-y-3">
-                      <Camera className="h-10 w-10 mx-auto text-stone-300" />
-                      <p className="text-sm font-bold text-stone-400">Kiosk camera is currently offline</p>
+          {/* Camera view — only shown when ready */}
+          {status === "ready" && (
+            <>
+              {/* Video container — always in DOM to keep ref stable */}
+              <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-black aspect-video flex items-center justify-center">
+                <video
+                  ref={kioskVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{ transform: "scaleX(-1)" }}
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Overlay only when camera is on */}
+                {cameraOn && (
+                  <>
+                    {/* Face guide circle */}
+                    <div
+                      className={`pointer-events-none absolute inset-8 rounded-full border-4 border-dashed transition-colors duration-300 ${faceStatusColor}`}
+                    />
+                    {/* Status label */}
+                    <div className="absolute bottom-3 left-3 right-3 rounded-xl bg-black/70 px-3 py-1.5 text-center text-xs font-bold text-white backdrop-blur">
+                      {faceStatusText}
                     </div>
-                  )}
-                </div>
-
-                {cameraError && (
-                  <p className="text-xs text-red-500 font-semibold">{cameraError}</p>
+                    {/* Kiosk badge */}
+                    <div className="absolute right-3 top-3 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                      Live
+                    </div>
+                  </>
                 )}
 
-                <div className="w-full max-w-lg flex gap-3">
-                  {!cameraActive ? (
-                    <Button className="flex-1 rounded-xl h-11 text-xs font-black uppercase tracking-wider bg-primary text-white shadow shadow-primary/20" onClick={startCamera}>
-                      Activate Attendance Kiosk
-                    </Button>
-                  ) : (
-                    <Button variant="outline" className="flex-1 rounded-xl h-11 text-xs font-bold" onClick={stopCamera}>
-                      Deactivate Kiosk
-                    </Button>
-                  )}
-                </div>
+                {/* Placeholder when camera is off */}
+                {!cameraOn && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950 text-stone-400">
+                    <Camera className="h-8 w-8 opacity-30" />
+                    <p className="text-xs font-bold opacity-50">Camera offline</p>
+                  </div>
+                )}
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Daily Attendance Logs */}
-      <Card className="border-stone-100 shadow-sm rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+              {/* Action button */}
+              {!cameraOn ? (
+                <Button
+                  className="w-full max-w-sm rounded-xl font-bold bg-primary text-white shadow-sm"
+                  onClick={startKiosk}
+                >
+                  Activate Kiosk Camera
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full max-w-sm rounded-xl font-bold"
+                  onClick={stopKiosk}
+                >
+                  Stop Camera
+                </Button>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Logs */}
+      <Card className="overflow-hidden rounded-2xl border-stone-100 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
           <div>
-            <CardTitle className="text-base font-black">Today's Attendance Logs</CardTitle>
-            <CardDescription className="text-xs">Real-time kiosk check-ins for {today}.</CardDescription>
+            <CardTitle className="text-sm font-black">Today's Logs</CardTitle>
+            <CardDescription className="text-xs">{today}</CardDescription>
           </div>
-          <Button variant="outline" size="sm" className="h-8 text-xs font-bold rounded-lg border-stone-200" onClick={loadLogs}>
-            Refresh
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-lg text-xs font-bold"
+            onClick={loadLogs}
+          >
+            {logsLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Refresh"}
           </Button>
         </CardHeader>
         <CardContent className="pt-4">
-          {loadingLogs ? (
-            <p className="text-xs text-muted-foreground py-6 text-center">Loading logs...</p>
-          ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground space-y-2 border border-dashed rounded-xl">
-              <ShieldAlert className="h-6 w-6 mx-auto text-stone-300" />
-              <p className="text-xs font-bold text-stone-400">No logs captured today</p>
+          {logs.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <ShieldAlert className="h-6 w-6 text-stone-300" />
+              <p className="text-xs font-bold text-stone-400">No check-ins today</p>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-stone-50 border-b text-stone-500 font-bold">
+              <table className="w-full text-xs">
+                <thead className="border-b bg-stone-50 font-bold text-stone-500">
                   <tr>
-                    <th className="p-3">Employee</th>
-                    <th className="p-3">Method</th>
-                    <th className="p-3">Check In Time</th>
-                    <th className="p-3">Check Out Time</th>
+                    <th className="p-3 text-left">Employee</th>
+                    <th className="p-3 text-left">In</th>
+                    <th className="p-3 text-left">Out</th>
+                    <th className="p-3 text-left">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-stone-50/40">
-                      <td className="p-3 font-semibold text-stone-900">{log.employeeName}</td>
-                      <td className="p-3">
-                        <Badge variant="secondary" className="capitalize text-[10px] px-2 py-0.5 rounded-md font-bold">
-                          {log.checkInMethod} Check-in
-                        </Badge>
-                      </td>
+                    <tr key={log.id} className="hover:bg-stone-50/50">
+                      <td className="p-3 font-semibold">{log.employeeName}</td>
                       <td className="p-3 font-bold text-stone-700">
-                        {log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
-                        {log.isLate && <Badge variant="destructive" className="ml-2 scale-90 text-[8px] font-black">Late</Badge>}
+                        {log.checkIn
+                          ? new Date(log.checkIn).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
                       </td>
                       <td className="p-3 text-stone-500">
-                        {log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
+                        {log.checkOut
+                          ? new Date(log.checkOut).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="p-3">
+                        {log.isLate ? (
+                          <Badge variant="destructive" className="text-[9px] font-black">
+                            Late
+                          </Badge>
+                        ) : (
+                          <Badge variant="success" className="text-[9px] font-black">
+                            On Time
+                          </Badge>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -580,45 +650,64 @@ export default function AttendancePage() {
         </CardContent>
       </Card>
 
-      {/* Enrollment Dialog Modal */}
-      <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-all duration-200 ${enrollModalOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4 transform transition-all duration-200">
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-black text-sm text-stone-900">Enroll Face Profile</h3>
-            <button
-              onClick={() => {
-                setEnrollModalOpen(false);
-                stopEnrollCamera();
-              }}
-              className="text-xs font-bold text-stone-400 hover:text-stone-600"
-            >
-              Close
-            </button>
-          </div>
-          
-          <div className="relative aspect-video bg-stone-950 rounded-xl overflow-hidden border">
-            <video
-              ref={enrollVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover scale-x-[-1]"
-            />
-          </div>
-          
-          <p className="text-[10px] text-stone-400 text-center leading-relaxed">
-            Ensure you are in well-lit conditions, face the camera directly, and avoid wearing caps or sunglasses.
-          </p>
+      {/* Enroll Modal */}
+      {enrollOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-sm font-black">Enroll Face Profile</h3>
+              <button
+                onClick={closeEnroll}
+                className="text-xs font-bold text-stone-400 hover:text-stone-700"
+              >
+                Cancel
+              </button>
+            </div>
 
-          <Button
-            className="w-full rounded-xl h-10 font-bold bg-primary text-white"
-            disabled={registeringFace}
-            onClick={handleRegisterFace}
-          >
-            {registeringFace ? "Processing snapshot..." : "Capture & Enroll Profile"}
-          </Button>
+            <div className="overflow-hidden rounded-xl bg-black aspect-video">
+              <video
+                ref={enrollVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ transform: "scaleX(-1)" }}
+                className="h-full w-full object-cover"
+              />
+            </div>
+
+            <p className="text-center text-[10px] text-stone-400">
+              Look directly at the camera in good lighting, then tap Capture.
+            </p>
+
+            <Button
+              className="w-full rounded-xl font-bold"
+              onClick={captureAndEnroll}
+              disabled={enrollCapturing}
+            >
+              {enrollCapturing ? (
+                <>
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Processing…
+                </>
+              ) : (
+                "Capture & Enroll"
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Utility: load an HTMLImageElement from a URL (handles base64 + remote URLs)
+// ---------------------------------------------------------------------------
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = src;
+  });
 }
