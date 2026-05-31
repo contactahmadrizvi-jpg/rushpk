@@ -105,6 +105,8 @@ type CheckInStep =
 export default function AttendancePage() {
   const { profile } = useAuthStore();
   const isSA = isSuperAdmin(profile);
+  // admins (super_admin OR admin) can enroll employee faces
+  const isAdmin = isSA || profile?.role === "admin";
 
   // ── face-api boot ──
   const [bootStatus, setBootStatus] = useState<BootStatus>("idle");
@@ -511,8 +513,8 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* ── Tab switcher (super admin only gets Enroll tab) ── */}
-      {isSA && (
+      {/* ── Tab switcher (admin + super admin get Enroll tab) ── */}
+      {isAdmin && (
         <div className="flex w-fit gap-1 rounded-xl border bg-stone-100 p-1 text-xs">
           {(["checkin", "enroll"] as const).map((t) => (
             <button
@@ -652,9 +654,9 @@ export default function AttendancePage() {
       )}
 
       {/* ========================================================
-          ENROLL TAB (super admin only)
+          ENROLL TAB (admin + super admin)
          ======================================================== */}
-      {tab === "enroll" && isSA && (
+      {tab === "enroll" && isAdmin && (
         <Card className="overflow-hidden rounded-2xl border-stone-100 shadow-sm">
           <CardHeader className="border-b pb-3">
             <CardTitle className="text-sm font-black flex items-center gap-2">
