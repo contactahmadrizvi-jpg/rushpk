@@ -146,7 +146,7 @@ export default function AdminInventoryPage() {
         unit: selectedItem.unit,
         notes: entryNotes.trim() || "Daily Entry",
         createdAt: createdDate,
-        createdBy: profile?.name || profile?.email || "admin",
+        createdBy: profile?.displayName || profile?.email || "admin",
       } as Omit<StockMovement, "id">);
 
       toast.success(`Entered ${qtyNum} ${selectedItem.unit} of ${selectedItem.name}`);
