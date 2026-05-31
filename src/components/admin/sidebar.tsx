@@ -14,6 +14,7 @@ import {
   Clock,
   Shield,
   X,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RESTAURANT } from "@/constants";
@@ -26,6 +27,7 @@ const nav = [
   { href: "/admin/orders", icon: ShoppingBag, label: "All Orders", perm: "orders", key: "all-orders" },
   { href: "/admin/orders?tab=pending", icon: Clock, label: "Pending Orders", perm: "orders", key: "pending-orders" },
   { href: "/admin/menu", icon: UtensilsCrossed, label: "Menu", perm: "menu" },
+  { href: "/admin/deals", icon: Tag, label: "Deals", perm: "menu" },
   { href: "/admin/inventory", icon: Package, label: "Inventory", perm: "inventory" },
   { href: "/admin/employees", icon: Users, label: "Employees", perm: "employees" },
   { href: "/admin/roles", icon: Shield, label: "Roles", perm: "roles" },
