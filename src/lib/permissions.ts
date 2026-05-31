@@ -30,18 +30,19 @@ export function canAssignManagementRoles(user: AppUser | null | undefined): bool
 }
 
 export function getStaffHomeRoute(user: AppUser | null | undefined): string {
-  if (userHasPermission(user, "*") || userHasPermission(user, "dashboard")) return "/admin";
-  if (userHasPermission(user, "pos")) return "/pos";
-  if (userHasPermission(user, "kitchen")) return "/kitchen";
-  if (userHasPermission(user, "delivery")) return "/admin";
-  if (userHasPermission(user, "*") || userHasPermission(user, "dashboard")) return "/admin";
+  if (!user) return "/login";
+  const isAdmin = user.role === "admin" || user.role === "super_admin";
+  
+  if (isAdmin) {
+    if (userHasPermission(user, "dashboard")) return "/admin";
+    return "/admin/orders";
+  }
+  
   if (userHasPermission(user, "pos")) return "/pos";
   if (userHasPermission(user, "kitchen")) return "/kitchen";
   if (userHasPermission(user, "delivery")) return "/rider";
-  if (userHasPermission(user, "orders") || userHasPermission(user, "online_orders")) {
-    return "/admin/orders";
-  }
-  return "/admin";
+  
+  return "/home";
 }
 
 export function canViewOrders(user: AppUser | null | undefined): boolean {

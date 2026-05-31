@@ -122,6 +122,18 @@ export default function AttendancePage() {
   // employees can only enroll their own face
   const isEmployee = profile?.role === "employee";
 
+  if (profile && !isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 p-8 text-center min-h-[400px]">
+        <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
+        <p className="max-w-md text-muted-foreground">
+          You are signed in as <strong>{profile.displayName || profile.email}</strong>.
+          Only system administrators and admins can view the attendance system dashboard, logs, or enrollment.
+        </p>
+      </div>
+    );
+  }
+
   // ── face-api boot ──
   const [bootStatus, setBootStatus] = useState<BootStatus>("idle");
   const [bootMsg, setBootMsg] = useState("");
