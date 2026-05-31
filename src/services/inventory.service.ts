@@ -122,9 +122,15 @@ export async function adjustStock(
     type === "purchase" || type === "return" ? quantity : -Math.abs(quantity);
   const newStock = Math.max(0, item.currentStock + delta);
 
-  await inventoryRepo.update(inventoryItemId, {
+  const updatePayload: Partial<InventoryItem> = {
     currentStock: newStock,
-  } as Partial<InventoryItem>);
+  };
+
+  if (type === "purchase" || type === "return") {
+    updatePayload.totalStock = (item.totalStock || item.currentStock) + quantity;
+  }
+
+  await inventoryRepo.update(inventoryItemId, updatePayload);
 
   await movementRepo.create({
     inventoryItemId,

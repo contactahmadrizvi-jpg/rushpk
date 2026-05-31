@@ -22,6 +22,7 @@ export function InventoryEditDialog({ item, onSave }: Props) {
     sku: item.sku,
     unit: item.unit,
     currentStock: String(item.currentStock),
+    totalStock: String(item.totalStock ?? item.currentStock),
     minStock: String(item.minStock),
     costPerUnit: String(item.costPerUnit),
     preventSellWhenLow: item.preventSellWhenLow,
@@ -34,6 +35,7 @@ export function InventoryEditDialog({ item, onSave }: Props) {
         sku: item.sku,
         unit: item.unit,
         currentStock: String(item.currentStock),
+        totalStock: String(item.totalStock ?? item.currentStock),
         minStock: String(item.minStock),
         costPerUnit: String(item.costPerUnit),
         preventSellWhenLow: item.preventSellWhenLow,
@@ -49,6 +51,7 @@ export function InventoryEditDialog({ item, onSave }: Props) {
         sku: form.sku,
         unit: form.unit as InventoryUnit,
         currentStock: Number(form.currentStock),
+        totalStock: Number(form.totalStock),
         minStock: Number(form.minStock),
         costPerUnit: Number(form.costPerUnit),
         preventSellWhenLow: form.preventSellWhenLow,
@@ -100,13 +103,17 @@ export function InventoryEditDialog({ item, onSave }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Current stock</Label>
-              <Input type="number" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: e.target.value })} />
+              <Label>Total stock</Label>
+              <Input type="number" value={form.totalStock} onChange={(e) => setForm({ ...form, totalStock: e.target.value })} />
             </div>
             <div>
-              <Label>Min stock</Label>
-              <Input type="number" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} />
+              <Label>Current stock (Remaining)</Label>
+              <Input type="number" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: e.target.value })} />
             </div>
+          </div>
+          <div>
+            <Label>Min stock</Label>
+            <Input type="number" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} />
           </div>
           <div>
             <Label>Cost per unit (PKR)</Label>

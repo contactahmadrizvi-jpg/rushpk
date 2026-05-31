@@ -80,6 +80,7 @@ export default function AdminInventoryPage() {
       sku: newItem.name.replace(/\s+/g, "-").toUpperCase(),
       unit: newItem.unit,
       currentStock: Number(newItem.stock) || 0,
+      totalStock: Number(newItem.stock) || 0,
       minStock: Number(newItem.minStock),
       costPerUnit: 0,
       isActive: true,
@@ -129,9 +130,11 @@ export default function AdminInventoryPage() {
 
       const createdDate = new Date(entryDateTime).toISOString();
       const newStock = selectedItem.currentStock + qtyNum;
+      const newTotalStock = (selectedItem.totalStock || selectedItem.currentStock) + qtyNum;
 
       await inventoryRepo.update(selectedItemId, {
         currentStock: newStock,
+        totalStock: newTotalStock,
         updatedAt: new Date().toISOString(),
       });
 
@@ -304,6 +307,7 @@ export default function AdminInventoryPage() {
             <thead className="bg-stone-50 border-b border-stone-100">
               <tr className="font-bold text-stone-500">
                 <th className="p-3.5">Material Item</th>
+                <th className="p-3.5">Total Stock</th>
                 <th className="p-3.5">Remaining Stock</th>
                 <th className="p-3.5">Min Limit</th>
                 <th className="p-3.5">Unit</th>
@@ -315,6 +319,7 @@ export default function AdminInventoryPage() {
               {items.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 border-stone-50 hover:bg-stone-50/30 transition">
                   <td className="p-3.5 font-bold text-stone-900">{item.name}</td>
+                  <td className="p-3.5 font-extrabold text-stone-700">{item.totalStock ?? item.currentStock}</td>
                   <td className="p-3.5 font-extrabold text-stone-700">{item.currentStock}</td>
                   <td className="p-3.5 text-stone-400 font-medium">{item.minStock}</td>
                   <td className="p-3.5 text-stone-400 capitalize">{item.unit}</td>

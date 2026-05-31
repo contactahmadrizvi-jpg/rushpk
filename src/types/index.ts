@@ -154,6 +154,7 @@ export interface InventoryItem {
   sku: string;
   unit: InventoryUnit;
   currentStock: number;
+  totalStock?: number;
   minStock: number;
   costPerUnit: number;
   supplierId?: string;
