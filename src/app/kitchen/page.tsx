@@ -29,6 +29,9 @@ export default function KitchenPage() {
   const [selectedToAddMenuId, setSelectedToAddMenuId] = useState("");
   const [menuSearch, setMenuSearch] = useState("");
 
+  // Payment modal state
+  const [paymentPendingOrder, setPaymentPendingOrder] = useState<Order | null>(null);
+
   useEffect(() => {
     let remote: Order[] = [];
 
@@ -66,7 +69,7 @@ export default function KitchenPage() {
     };
   }, []);
 
-  async function setKitchen(id: string, status: KitchenStatus, orderObj?: Order) {
+  async function setKitchen(id: string, status: KitchenStatus, orderObj?: Order, chosenPaymentMethod?: Order["paymentMethod"]) {
     const statusMap: Record<KitchenStatus, Order["status"]> = {
       new: "received",
       preparing: "preparing",
@@ -78,18 +81,31 @@ export default function KitchenPage() {
 
     // If marked served / complete, print out receipt!
     if (status === "served" && orderObj) {
+      const finalOrder = chosenPaymentMethod
+        ? { ...orderObj, paymentMethod: chosenPaymentMethod, paymentStatus: "paid" as const }
+        : orderObj;
       toast.success("Printing final receipt at POS...");
-      requestAnimationFrame(() => void printReceipt(orderObj));
+      requestAnimationFrame(() => void printReceipt(finalOrder));
     }
 
     if (id.startsWith("local-")) {
       const m = await import("@/lib/pos-instant");
-      m.updatePendingOrderStatus(id, targetStatus, status);
+      m.updatePendingOrderStatus(id, targetStatus, status, chosenPaymentMethod);
       toast.success(`Order marked completed!`);
       return;
     }
 
-    await updateOrderStatus(id, targetStatus, status);
+    if (chosenPaymentMethod) {
+      await updateDoc(doc(getFirestoreDb(), "orders", id), {
+        status: targetStatus,
+        kitchenStatus: status,
+        paymentMethod: chosenPaymentMethod,
+        paymentStatus: "paid",
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await updateOrderStatus(id, targetStatus, status);
+    }
     toast.success(`Order marked completed!`);
   }
 
@@ -270,7 +286,7 @@ export default function KitchenPage() {
                     <button
                       type="button"
                       className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-primary/95 active:scale-95 transition flex items-center justify-center gap-1.5 shadow shadow-primary/20"
-                      onClick={() => setKitchen(order.id, "served", order)}
+                      onClick={() => setPaymentPendingOrder(order)}
                     >
                       <CheckCircle className="h-4 w-4" />
                       Proceed
@@ -385,6 +401,54 @@ export default function KitchenPage() {
               <Button className="flex-1 rounded-xl font-bold" onClick={saveEditedOrder}>
                 Save Changes
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Select Payment Method Modal */}
+      {paymentPendingOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-slate-900">
+                Select Payment Method
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                Confirm payment method for Order #{paymentPendingOrder.dailyOrderNumber ?? paymentPendingOrder.orderNumber}
+              </p>
+            </div>
+
+            <div className="grid gap-3">
+              {[
+                { id: "cash", label: "💵 Cash", color: "hover:bg-green-50 hover:border-green-300 hover:text-green-700" },
+                { id: "card", label: "💳 Card", color: "hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700" },
+                { id: "online", label: "🌐 Online", color: "hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700" },
+              ].map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  onClick={async () => {
+                    const orderToProceed = paymentPendingOrder;
+                    setPaymentPendingOrder(null);
+                    await setKitchen(orderToProceed.id, "served", orderToProceed, method.id as any);
+                  }}
+                  className={`w-full py-3.5 px-4 rounded-xl border border-slate-200 text-sm font-extrabold text-slate-700 bg-white transition-all active:scale-95 duration-200 text-left flex items-center justify-between ${method.color}`}
+                >
+                  <span>{method.label}</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-500 py-0.5 px-2 rounded-full font-bold uppercase tracking-wider">Select</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="border-t pt-3">
+              <button
+                type="button"
+                className="w-full py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-500 hover:bg-slate-50 active:scale-95 transition"
+                onClick={() => setPaymentPendingOrder(null)}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

@@ -97,7 +97,12 @@ export function removePendingByLocalId(localId: string) {
   writePending(readPending().filter((p) => p.localId !== localId));
 }
 
-export function updatePendingOrderStatus(localId: string, status: Order["status"], kitchenStatus: KitchenStatus) {
+export function updatePendingOrderStatus(
+  localId: string,
+  status: Order["status"],
+  kitchenStatus: KitchenStatus,
+  paymentMethod?: Order["paymentMethod"]
+) {
   const list = readPending();
   let updated = false;
   for (const p of list) {
@@ -106,6 +111,11 @@ export function updatePendingOrderStatus(localId: string, status: Order["status"
       p.order.kitchenStatus = kitchenStatus;
       p.input.status = status;
       p.input.kitchenStatus = kitchenStatus;
+      if (paymentMethod) {
+        p.order.paymentMethod = paymentMethod;
+        p.input.paymentMethod = paymentMethod;
+        p.order.paymentStatus = "paid";
+      }
       updated = true;
     }
   }
