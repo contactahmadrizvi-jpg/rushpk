@@ -304,7 +304,19 @@ export default function POSPage() {
     const num = order.dailyOrderNumber ?? order.orderNumber;
 
     // Auto-print kitchen order ticket (KOT)
-    void printKOT(order);
+    await printKOT(order);
+
+    // Ask if print was successful/done or cancelled
+    const confirmed = window.confirm("Did you successfully print the kitchen order ticket (KOT)?\nClick 'OK' to send to kitchen, or 'Cancel' to discard the order.");
+    if (!confirmed) {
+      const m = await import("@/lib/pos-instant");
+      m.removePendingByLocalId(order.id);
+      window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+      toast.error("Order printing cancelled. Order was not sent to kitchen.");
+      setPaying(false);
+      setPendingOrderInput(null);
+      return;
+    }
 
     clearOrder();
     setDiscountPercent(0);
