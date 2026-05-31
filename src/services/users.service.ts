@@ -37,6 +37,12 @@ export async function listStaffUsers(): Promise<AppUser[]> {
   return all.filter((u) => u.role !== "customer");
 }
 
+/** Fetch a single user by email address */
+export async function getUserByEmail(email: string): Promise<AppUser | null> {
+  const all = await listAllRegisteredUsers();
+  return all.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
+}
+
 export async function updateUserAccess(
   userId: string,
   data: { role?: UserRole; permissions?: string[]; isActive?: boolean }
