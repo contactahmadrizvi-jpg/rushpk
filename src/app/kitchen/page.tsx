@@ -15,6 +15,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase/config";
 import { Minus, Plus, Edit, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -26,6 +27,7 @@ export default function KitchenPage() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editedItems, setEditedItems] = useState<Order["items"]>([]);
   const [selectedToAddMenuId, setSelectedToAddMenuId] = useState("");
+  const [menuSearch, setMenuSearch] = useState("");
 
   useEffect(() => {
     let remote: Order[] = [];
@@ -96,6 +98,7 @@ export default function KitchenPage() {
     setEditingOrder(order);
     setEditedItems(JSON.parse(JSON.stringify(order.items)));
     setSelectedToAddMenuId("");
+    setMenuSearch("");
   }
 
   function handleUpdateQty(idx: number, delta: number) {
@@ -296,6 +299,13 @@ export default function KitchenPage() {
             {/* Menu Item Addition Selector */}
             <div className="bg-stone-50 p-3.5 rounded-2xl border space-y-2">
               <span className="text-xs font-bold text-stone-600 uppercase tracking-wider">Add Item From Menu</span>
+              <Input
+                type="text"
+                placeholder="🔍 Search food menu..."
+                value={menuSearch}
+                onChange={(e) => setMenuSearch(e.target.value)}
+                className="h-10 text-xs rounded-xl border bg-white px-3"
+              />
               <div className="flex gap-2">
                 <select
                   value={selectedToAddMenuId}
@@ -303,11 +313,15 @@ export default function KitchenPage() {
                   className="h-10 flex-1 rounded-xl border bg-white px-3 text-xs font-semibold"
                 >
                   <option value="">-- Select Menu Item --</option>
-                  {menuItems.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.price.toLocaleString()} PKR)
-                    </option>
-                  ))}
+                  {menuItems
+                    .filter((m) =>
+                      m.name.toLowerCase().includes(menuSearch.toLowerCase())
+                    )
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.price.toLocaleString()} PKR)
+                      </option>
+                    ))}
                 </select>
                 <button
                   type="button"

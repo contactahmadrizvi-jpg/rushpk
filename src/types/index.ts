@@ -302,6 +302,7 @@ export interface Deal {
   discountPercent?: number;
   fixedPrice?: number;
   menuItemIds?: string[];
+  selectedVariants?: Record<string, string>; // menuItemId -> variantId
   isActive: boolean;
   validFrom: string;
   validTo: string;

@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { usePOSStore } from "@/stores/pos-store";
 import { subscribeMenuItems, getActiveCategories } from "@/services/menu.service";
 import type { CreateOrderInput } from "@/services/orders.service";
+import { subscribeKitchenOrders } from "@/services/orders.service";
 import { preloadPrintHeader, printPosDocuments, printKOT } from "@/lib/print";
 import { buildInstantPosOrder } from "@/lib/pos-instant";
 import { startPosSyncWorker } from "@/services/pos-sync.service";
@@ -73,6 +74,9 @@ export default function POSPage() {
   // Table Dialpad State
   const [showDialpad, setShowDialpad] = useState(false);
 
+  // Active Orders subscription for Table reservations
+  const [activeOrders, setActiveOrders] = useState<any[]>([]);
+
   const {
     items,
     orderType,
@@ -104,15 +108,27 @@ export default function POSPage() {
       setMenuLoading(false);
     });
 
+    // Subscribe to active kitchen orders
+    const unsubKitchen = subscribeKitchenOrders((orders) => {
+      setActiveOrders(orders);
+    });
+
     // Load saved customers
     const loaded = JSON.parse(localStorage.getItem("pos_saved_customers") || "[]");
     setSavedCustomers(loaded);
 
     return () => {
       unsub();
+      unsubKitchen();
       stopSync();
     };
   }, [profile, router, setCustomer]);
+
+  const occupiedTables = useMemo(() => {
+    return activeOrders
+      .filter((o) => o.type === "dine_in" && o.tableNumber != null)
+      .map((o) => o.tableNumber as number);
+  }, [activeOrders]);
 
   const filtered = useMemo(() => {
     let list = menu;
@@ -156,6 +172,36 @@ export default function POSPage() {
     if (!items.length) {
       toast.error("Tap items to add to cart");
       return;
+    }
+
+    // Check if table is occupied for dine-in
+    if (orderType === "dine_in" && tableNumber != null && occupiedTables.includes(tableNumber)) {
+      toast.error(`Table #${tableNumber} is already occupied/reserved! Please choose another table.`);
+      return;
+    }
+
+    // Delivery validation
+    if (orderType === "delivery") {
+      if (!customerName.trim()) {
+        toast.error("Customer name is required for delivery orders");
+        return;
+      }
+      if (!customerPhone.trim()) {
+        toast.error("Customer phone is required for delivery orders");
+        return;
+      }
+      if (!street.trim()) {
+        toast.error("Street / House No. is required for delivery orders");
+        return;
+      }
+      if (!area.trim()) {
+        toast.error("Area is required for delivery orders");
+        return;
+      }
+      if (!city.trim()) {
+        toast.error("City is required for delivery orders");
+        return;
+      }
     }
 
     setPaying(true);
@@ -242,6 +288,7 @@ export default function POSPage() {
     area,
     city,
     savedCustomers,
+    occupiedTables,
   ]);
 
   useEffect(() => {
@@ -260,14 +307,14 @@ export default function POSPage() {
       {/* Customer — compact */}
       <div className="border-b bg-gradient-to-br from-orange-50 to-white p-4">
         <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
-          <User className="h-3.5 w-3.5" /> Customer (Optional)
+          <User className="h-3.5 w-3.5" /> Customer {orderType === "delivery" ? <span className="text-red-500 font-black">*</span> : "(Optional)"}
         </p>
         <div className="grid gap-2 sm:grid-cols-2 relative">
           <div className="relative">
             <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <Input
               className="h-11 rounded-xl border-stone-200 bg-white pl-9"
-              placeholder="Name"
+              placeholder={orderType === "delivery" ? "Name *" : "Name"}
               value={customerName}
               onChange={(e) => setCustomer(e.target.value, customerPhone)}
             />
@@ -276,7 +323,7 @@ export default function POSPage() {
             <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <Input
               className="h-11 rounded-xl border-stone-200 bg-white pl-9"
-              placeholder="Phone"
+              placeholder={orderType === "delivery" ? "Phone *" : "Phone"}
               value={customerPhone}
               onChange={(e) => {
                 const val = e.target.value;
@@ -314,25 +361,25 @@ export default function POSPage() {
         {orderType === "delivery" && (
           <div className="mt-3 space-y-2 border-t pt-3 border-stone-100">
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
-              <MapPin className="h-3.5 w-3.5" /> Delivery Address
+              <MapPin className="h-3.5 w-3.5" /> Delivery Address <span className="text-red-500 font-black">*</span>
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Input
                 className="h-10 rounded-xl border-stone-200 bg-white text-xs"
-                placeholder="Street / House No."
+                placeholder="Street / House No. *"
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
               />
               <Input
                 className="h-10 rounded-xl border-stone-200 bg-white text-xs"
-                placeholder="Area"
+                placeholder="Area *"
                 value={area}
                 onChange={(e) => setArea(e.target.value)}
               />
             </div>
             <Input
               className="h-10 rounded-xl border-stone-200 bg-white text-xs"
-              placeholder="City"
+              placeholder="City *"
               value={city}
               onChange={(e) => setCity(e.target.value)}
             />
@@ -345,17 +392,31 @@ export default function POSPage() {
             </p>
             {/* Visual Numerical Dialpad inline */}
             <div className="grid grid-cols-3 gap-1.5 bg-stone-50/50 p-2 rounded-2xl border border-stone-100">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => handleDialpadPress(k)}
-                  className="flex h-10 items-center justify-center rounded-xl bg-white text-sm font-black text-stone-800 shadow-sm active:scale-95 border border-stone-100/50"
-                >
-                  {k === "back" ? "⌫" : k}
-                </button>
-              ))}
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
+                const num = k === "back" || k === "C" ? null : Number(k);
+                const isOccupied = num !== null && occupiedTables.includes(num);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => handleDialpadPress(k)}
+                    className={cn(
+                      "flex h-10 items-center justify-center rounded-xl text-sm font-black shadow-sm active:scale-95 border",
+                      isOccupied
+                        ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
+                        : "bg-white text-stone-800 border-stone-100/50 hover:bg-stone-50"
+                    )}
+                  >
+                    {k === "back" ? "⌫" : k}
+                  </button>
+                );
+              })}
             </div>
+            {occupiedTables.length > 0 && (
+              <div className="mt-2 text-[10px] font-bold text-red-600 bg-red-50/60 p-2 rounded-xl border border-red-100/40">
+                ⚠️ Occupied Tables: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
+              </div>
+            )}
           </div>
         )}
       </div>
