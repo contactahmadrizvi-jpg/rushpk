@@ -74,7 +74,7 @@ function playChime(success = true) {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.4);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -107,6 +107,8 @@ export default function AttendancePage() {
   const isSA = isSuperAdmin(profile);
   // admins (super_admin OR admin) can enroll any employee's face
   const isAdmin = isSA || profile?.role === "admin";
+  // employees can only enroll their own face
+  const isEmployee = profile?.role === "employee";
 
   // ── face-api boot ──
   const [bootStatus, setBootStatus] = useState<BootStatus>("idle");
@@ -150,10 +152,11 @@ export default function AttendancePage() {
     }
   }, [ciStep]);
 
-  // ── bind enroll stream ──
+  // ── bind enroll stream (only as a fallback if ref is already set) ──
   useEffect(() => {
     if (enrollTarget && enrollStreamRef.current && enrollVideoRef.current) {
       enrollVideoRef.current.srcObject = enrollStreamRef.current;
+      enrollVideoRef.current.play().catch(() => {});
     }
   }, [enrollTarget]);
 
@@ -391,9 +394,13 @@ export default function AttendancePage() {
         audio: false,
       });
       enrollStreamRef.current = stream;
-      // binding via useEffect
+      // Directly assign srcObject — don't rely on useEffect timing
+      if (enrollVideoRef.current) {
+        enrollVideoRef.current.srcObject = stream;
+        enrollVideoRef.current.play().catch(() => {});
+      }
     } catch {
-      toast.error("Camera access denied.");
+      toast.error("Camera access denied. Please allow camera permission and try again.");
       setEnrollTarget(null);
     }
   };
@@ -412,9 +419,21 @@ export default function AttendancePage() {
 
     try {
       const vid = enrollVideoRef.current;
+
+      // Wait up to 4 seconds for the camera feed to be ready
       if (vid.readyState < 2) {
-        toast.error("Camera not ready yet.");
-        return;
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("timeout")), 4000);
+          const check = setInterval(() => {
+            if (vid.readyState >= 2) {
+              clearInterval(check);
+              clearTimeout(timeout);
+              resolve();
+            }
+          }, 100);
+        }).catch(() => {
+          throw new Error("Camera feed did not start in time. Please close and re-open the enroll dialog.");
+        });
       }
 
       const det = await fa
@@ -444,7 +463,7 @@ export default function AttendancePage() {
       closeEnroll();
       loadStaff();
     } catch (e) {
-      toast.error("Enrollment failed.");
+      toast.error(e instanceof Error ? e.message : "Enrollment failed. Please try again.");
     } finally {
       setEnrollCapturing(false);
     }
@@ -472,28 +491,28 @@ export default function AttendancePage() {
     ciStep === "camera"
       ? "border-amber-400 animate-pulse"
       : ciStep === "matched"
-      ? "border-emerald-400"
-      : ciStep === "failed"
-      ? "border-red-400"
-      : "border-white/20";
+        ? "border-emerald-400"
+        : ciStep === "failed"
+          ? "border-red-400"
+          : "border-white/20";
 
   const ciStatusText =
     ciStep === "camera"
       ? "Looking for your face…"
       : ciStep === "matched"
-      ? `✅ Verified — ${ciUser?.displayName}`
-      : ciStep === "failed"
-      ? "❌ Face mismatch — not recognised"
-      : "";
+        ? `✅ Verified — ${ciUser?.displayName}`
+        : ciStep === "failed"
+          ? "❌ Face mismatch — not recognised"
+          : "";
 
   // ==========================================================================
   // JSX
   // ==========================================================================
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4">
+    <div className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-5 sm:py-6">
       {/* ── Header ── */}
       <div>
-        <h1 className="text-xl font-black tracking-tight">Facial Attendance</h1>
+        <h1 className="text-lg sm:text-xl font-black tracking-tight">Facial Attendance</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
           Enter your email, then verify with your face to clock in.
         </p>
@@ -513,18 +532,21 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* ── Tab switcher (admin + super admin get Enroll tab) ── */}
-      {isAdmin && (
-        <div className="flex w-fit gap-1 rounded-xl border bg-stone-100 p-1 text-xs">
+      {/* ── Tab switcher — admins + employees get the Enroll tab ── */}
+      {(isAdmin || isEmployee) && (
+        <div className="flex w-full sm:w-fit gap-1 rounded-xl border bg-stone-100 p-1 text-xs">
           {(["checkin", "enroll"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`rounded-lg px-4 py-2 font-bold transition-all capitalize ${
-                tab === t ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-800"
-              }`}
+              className={`flex-1 sm:flex-none rounded-lg px-4 py-2 font-bold transition-all capitalize text-center ${tab === t ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-800"
+                }`}
             >
-              {t === "checkin" ? "Check In" : "Enroll Faces"}
+              {t === "checkin"
+                ? "Check In"
+                : isEmployee
+                  ? "My Face"
+                  : "Enroll Faces"}
             </button>
           ))}
         </div>
@@ -545,10 +567,10 @@ export default function AttendancePage() {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="flex flex-col items-center gap-4 pt-6 pb-6">
+          <CardContent className="flex flex-col items-center gap-4 pt-5 pb-5 px-3 sm:px-6">
             {/* Step: email entry */}
             {ciStep === "email" && (
-              <div className="w-full max-w-sm space-y-3">
+              <div className="w-full max-w-md space-y-3">
                 <div className="flex items-center gap-2 rounded-xl border bg-muted/30 px-4 py-3">
                   <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                   <input
@@ -557,7 +579,7 @@ export default function AttendancePage() {
                     value={ciEmail}
                     onChange={(e) => setCiEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleEmailSubmit()}
-                    className="flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-muted-foreground/60"
+                    className="flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-muted-foreground/60 min-w-0"
                   />
                 </div>
                 <Button
@@ -591,19 +613,19 @@ export default function AttendancePage() {
               <>
                 {/* Employee info banner */}
                 {ciUser && (
-                  <div className="flex w-full max-w-sm items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3">
+                  <div className="flex w-full max-w-md items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-black text-primary">
                       {ciUser.displayName.charAt(0)}
                     </div>
-                    <div>
-                      <p className="text-sm font-bold">{ciUser.displayName}</p>
-                      <p className="text-xs text-muted-foreground">{ciUser.email}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold truncate">{ciUser.displayName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{ciUser.email}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Camera view */}
-                <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-black aspect-video">
+                <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-black aspect-video">
                   <video
                     ref={ciVideoRef}
                     autoPlay
@@ -614,19 +636,19 @@ export default function AttendancePage() {
                   />
                   {/* Circular guide */}
                   <div
-                    className={`pointer-events-none absolute inset-8 rounded-full border-4 border-dashed transition-colors duration-300 ${ciStatusColor}`}
+                    className={`pointer-events-none absolute inset-6 sm:inset-8 rounded-full border-4 border-dashed transition-colors duration-300 ${ciStatusColor}`}
                   />
                   {/* Result overlay on match/fail */}
                   {(ciStep === "matched" || ciStep === "failed") && (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm`}>
                       {ciStep === "matched" ? (
                         <>
-                          <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+                          <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-400" />
                           <p className="text-sm font-black text-white">Attendance Marked!</p>
                         </>
                       ) : (
                         <>
-                          <UserX className="h-12 w-12 text-red-400" />
+                          <UserX className="h-10 w-10 sm:h-12 sm:w-12 text-red-400" />
                           <p className="text-sm font-black text-white">Face Not Recognised</p>
                         </>
                       )}
@@ -642,7 +664,7 @@ export default function AttendancePage() {
 
                 <Button
                   variant="outline"
-                  className="w-full max-w-sm rounded-xl font-bold"
+                  className="w-full max-w-md rounded-xl font-bold"
                   onClick={resetCheckIn}
                 >
                   {ciStep === "camera" ? "Cancel" : "Try Again / New Check-In"}
@@ -654,85 +676,137 @@ export default function AttendancePage() {
       )}
 
       {/* ========================================================
-          ENROLL TAB (admin + super admin only)
+          ENROLL TAB
+          - Admin / Super Admin: see full staff list, enroll anyone
+          - Employee: see only themselves, self-enroll only
          ======================================================== */}
-      {tab === "enroll" && isAdmin && (
+      {tab === "enroll" && (isAdmin || isEmployee) && (
         <Card className="overflow-hidden rounded-2xl border-stone-100 shadow-sm">
           <CardHeader className="border-b pb-3">
             <CardTitle className="text-sm font-black flex items-center gap-2">
               <UserCheck className="h-4 w-4 text-primary" />
-              Employee Face Enrollment
+              {isEmployee ? "Enroll My Face" : "Employee Face Enrollment"}
             </CardTitle>
             <CardDescription className="text-xs">
-              Capture each employee's face once. They can then use facial check-in going forward.
+              {isEmployee
+                ? "Capture your face once so you can use facial attendance going forward."
+                : "Capture each employee's face once. They can then use facial check-in going forward."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-4">
-            {staffLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {staffList.map((emp) => (
-                  <div
-                    key={emp.id}
-                    className="flex items-center justify-between rounded-xl border px-4 py-3 hover:bg-muted/20 transition"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-black text-primary">
-                        {emp.photoURL ? (
-                          <img
-                            src={emp.photoURL}
-                            alt="face"
-                            className="h-full w-full rounded-full object-cover"
-                          />
-                        ) : (
-                          emp.displayName.charAt(0)
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold">{emp.displayName}</p>
-                        <p className="text-xs text-muted-foreground">{emp.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {enrolledIds.has(emp.id) ? (
-                        <Badge variant="success" className="text-[9px] font-black px-2">
-                          Enrolled
-                        </Badge>
-                      ) : (
-                        <Badge variant="destructive" className="text-[9px] font-black px-2">
-                          Not enrolled
-                        </Badge>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 rounded-lg text-xs font-bold"
-                        disabled={bootStatus !== "ready"}
-                        onClick={() => openEnroll(emp)}
-                      >
-                        {enrolledIds.has(emp.id) ? "Re-enroll" : "Enroll"}
-                      </Button>
-                    </div>
+          <CardContent className="pt-4 px-3 sm:px-6">
+
+            {/* ── EMPLOYEE: self-enroll only ── */}
+            {isEmployee && profile && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-black text-primary">
+                    {profile.photoURL ? (
+                      <img
+                        src={profile.photoURL}
+                        alt="face"
+                        className="h-full w-full rounded-full object-cover"
+                      />
+                    ) : (
+                      (profile.displayName ?? "?").charAt(0)
+                    )}
                   </div>
-                ))}
-                {staffList.length === 0 && (
-                  <p className="py-8 text-center text-xs text-muted-foreground">
-                    No staff accounts found.
-                  </p>
-                )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold truncate">{profile.displayName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {profile.photoURL ? (
+                    <Badge variant="success" className="text-[9px] font-black px-2">
+                      Enrolled
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" className="text-[9px] font-black px-2">
+                      Not enrolled
+                    </Badge>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-lg text-xs font-bold"
+                    disabled={bootStatus !== "ready"}
+                    onClick={() => openEnroll(profile as any)}
+                  >
+                    {profile.photoURL ? "Re-enroll" : "Enroll"}
+                  </Button>
+                </div>
               </div>
             )}
+
+            {/* ── ADMIN: full staff list ── */}
+            {isAdmin && (
+              staffLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {staffList.map((emp) => (
+                    <div
+                      key={emp.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 hover:bg-muted/20 transition"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-black text-primary">
+                          {emp.photoURL ? (
+                            <img
+                              src={emp.photoURL}
+                              alt="face"
+                              className="h-full w-full rounded-full object-cover"
+                            />
+                          ) : (
+                            emp.displayName.charAt(0)
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">{emp.displayName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{emp.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {enrolledIds.has(emp.id) ? (
+                          <Badge variant="success" className="text-[9px] font-black px-2">
+                            Enrolled
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="text-[9px] font-black px-2">
+                            Not enrolled
+                          </Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-lg text-xs font-bold"
+                          disabled={bootStatus !== "ready"}
+                          onClick={() => openEnroll(emp)}
+                        >
+                          {enrolledIds.has(emp.id) ? "Re-enroll" : "Enroll"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {staffList.length === 0 && (
+                    <p className="py-8 text-center text-xs text-muted-foreground">
+                      No staff accounts found.
+                    </p>
+                  )}
+                </div>
+              )
+            )}
+
           </CardContent>
         </Card>
       )}
 
       {/* ── Enroll Modal ── */}
       {enrollTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+          <div className="w-full sm:max-w-md space-y-4 rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-2xl max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="text-sm font-black">Enrolling Face</h3>
@@ -740,13 +814,13 @@ export default function AttendancePage() {
               </div>
               <button
                 onClick={closeEnroll}
-                className="text-xs font-bold text-stone-400 hover:text-stone-700"
+                className="text-xs font-bold text-stone-400 hover:text-stone-700 px-2 py-1"
               >
                 Cancel
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl bg-black aspect-video">
+            <div className="overflow-hidden rounded-xl bg-black aspect-video w-full">
               <video
                 ref={enrollVideoRef}
                 autoPlay
@@ -754,6 +828,7 @@ export default function AttendancePage() {
                 muted
                 style={{ transform: "scaleX(-1)" }}
                 className="h-full w-full object-cover"
+                onLoadedMetadata={(e) => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
               />
             </div>
 
@@ -792,45 +867,45 @@ export default function AttendancePage() {
             {logsLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Refresh"}
           </Button>
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 px-0 sm:px-6">
           {logs.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
               <ShieldAlert className="h-6 w-6 text-stone-300" />
               <p className="text-xs font-bold text-stone-400">No check-ins today</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto rounded-xl border mx-3 sm:mx-0">
+              <table className="w-full text-xs min-w-[340px]">
                 <thead className="border-b bg-stone-50 font-bold text-stone-500">
                   <tr>
-                    <th className="p-3 text-left">Employee</th>
-                    <th className="p-3 text-left">In</th>
-                    <th className="p-3 text-left">Out</th>
-                    <th className="p-3 text-left">Status</th>
-                    {isSA && <th className="p-3 text-right">Actions</th>}
+                    <th className="p-2.5 sm:p-3 text-left">Employee</th>
+                    <th className="p-2.5 sm:p-3 text-left">In</th>
+                    <th className="p-2.5 sm:p-3 text-left">Out</th>
+                    <th className="p-2.5 sm:p-3 text-left">Status</th>
+                    {isSA && <th className="p-2.5 sm:p-3 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {logs.map((log) => (
                     <tr key={log.id} className="hover:bg-stone-50/50">
-                      <td className="p-3 font-semibold">{log.employeeName}</td>
-                      <td className="p-3 font-bold text-stone-700">
+                      <td className="p-2.5 sm:p-3 font-semibold max-w-[100px] sm:max-w-none truncate">{log.employeeName}</td>
+                      <td className="p-2.5 sm:p-3 font-bold text-stone-700 whitespace-nowrap">
                         {log.checkIn
                           ? new Date(log.checkIn).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "—"}
                       </td>
-                      <td className="p-3 text-stone-500">
+                      <td className="p-2.5 sm:p-3 text-stone-500 whitespace-nowrap">
                         {log.checkOut
                           ? new Date(log.checkOut).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : "—"}
                       </td>
-                      <td className="p-3">
+                      <td className="p-2.5 sm:p-3">
                         {log.isLate ? (
                           <Badge variant="destructive" className="text-[9px] font-black">
                             Late
@@ -842,7 +917,7 @@ export default function AttendancePage() {
                         )}
                       </td>
                       {isSA && (
-                        <td className="p-3 text-right">
+                        <td className="p-2.5 sm:p-3 text-right">
                           {!log.checkOut && (
                             <button
                               className="text-[10px] font-bold text-red-500 hover:underline"
