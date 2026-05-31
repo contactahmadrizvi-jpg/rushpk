@@ -153,9 +153,11 @@ export default function KitchenPage() {
     try {
       const newSubtotal = editedItems.reduce((sum, item) => sum + item.subtotal, 0);
       const newTotal = newSubtotal - editingOrder.discount;
-
       if (editingOrder.id.startsWith("local-")) {
-        toast.error("Offline local orders cannot be modified directly.");
+        const m = await import("@/lib/pos-instant");
+        m.updatePendingOrderItems(editingOrder.id, editedItems, newSubtotal, newTotal);
+        toast.success("Local order updated!");
+        setEditingOrder(null);
         return;
       }
 
@@ -244,16 +246,14 @@ export default function KitchenPage() {
 
                   {/* Footer Action: Single Action Button */}
                   <div className="p-3 border-t border-slate-100 bg-slate-50 flex gap-2">
-                    {!order.id.startsWith("local-") && (
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(order)}
-                        className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition active:scale-95 flex items-center justify-center shrink-0"
-                        title="Edit Items"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(order)}
+                      className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition active:scale-95 flex items-center justify-center shrink-0"
+                      title="Edit Items"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
 
                     <button
                       type="button"

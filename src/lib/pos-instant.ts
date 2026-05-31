@@ -115,6 +115,26 @@ export function updatePendingOrderStatus(localId: string, status: Order["status"
   }
 }
 
+export function updatePendingOrderItems(localId: string, items: Order["items"], subtotal: number, total: number) {
+  const list = readPending();
+  let updated = false;
+  for (const p of list) {
+    if (p.localId === localId) {
+      p.order.items = items;
+      p.order.subtotal = subtotal;
+      p.order.total = total;
+      p.input.items = items;
+      p.input.subtotal = subtotal;
+      p.input.total = total;
+      updated = true;
+    }
+  }
+  if (updated) {
+    writePending(list);
+    window.dispatchEvent(new Event("rush-pos-pending"));
+  }
+}
+
 export function markPendingFailed(localId: string) {
   const list = readPending().map((p) =>
     p.localId === localId ? { ...p, syncAttempts: p.syncAttempts + 1 } : p

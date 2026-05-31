@@ -80,8 +80,8 @@ function MenuContent() {
                   }
                 }
                 addItem(item, 1, custom);
-                toast.success(`Added ${item.name} to cart`);
-              }} 
+                toast.success(`Added ${item.name} to cart`, { duration: 1500 });
+              }}
             />
           ))}
         </div>

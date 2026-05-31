@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Menu } from "lucide-react";
@@ -8,12 +8,17 @@ import { AdminSidebar, AdminMobileNav } from "@/components/admin/sidebar";
 import { useAuthStore, isAdminRole } from "@/stores/auth-store";
 import { AdminAuthLoading } from "@/components/ui/page-loader";
 import { Button } from "@/components/ui/button";
+import { subscribeOrders } from "@/services/orders.service";
+import { playOrderSound } from "@/lib/print";
+import { toast } from "sonner";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { profile, loading, firebaseUser, refreshProfile } = useAuthStore();
   const [checked, setChecked] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const lastAlertRef = useRef(new Date().toISOString());
 
   useEffect(() => {
     if (loading) return;
@@ -23,6 +28,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     setChecked(true);
   }, [firebaseUser, loading, router]);
+
+  // Subscribe to new incoming orders for toast + sound alert
+  useEffect(() => {
+    if (!profile) return;
+
+    const unsub = subscribeOrders((list) => {
+      // Find orders created after the layout or last order alert was recorded
+      const newIncoming = list.filter(o => o.createdAt > lastAlertRef.current && o.status === "received");
+      if (newIncoming.length > 0) {
+        newIncoming.forEach(o => {
+          toast.success(`New order received! #${o.dailyOrderNumber ?? o.orderNumber}`, {
+            description: `${o.customerName} · ${o.type.replace("_", " ")}`,
+            duration: 8000
+          });
+          playOrderSound();
+        });
+        const maxTime = newIncoming.reduce((max, o) => o.createdAt > max ? o.createdAt : max, lastAlertRef.current);
+        lastAlertRef.current = maxTime;
+      }
+    });
+
+    return () => unsub();
+  }, [profile]);
 
   if (loading || !checked) {
     return <AdminAuthLoading />;

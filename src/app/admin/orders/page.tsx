@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { subscribeOrders } from "@/services/orders.service";
+import { getPendingKitchenOrders } from "@/lib/pos-instant";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ORDER_STATUS_LABELS } from "@/constants";
@@ -44,11 +45,28 @@ function AdminOrdersContent() {
     const end = new Date(`${selectedDate}T23:59:59.999`);
 
     return subscribeOrders((list) => {
+      let filteredRemote = list;
       if (filter === "online") {
-        setOrders(list.filter((o) => o.source === "website"));
-      } else {
-        setOrders(list);
+        filteredRemote = list.filter((o) => o.source === "website");
       }
+
+      const pendingLocal = getPendingKitchenOrders();
+      const syncedIds = new Set(filteredRemote.map((o) => o.id));
+      const localOnly = pendingLocal.filter((p) => !syncedIds.has(p.id));
+
+      const isTodaySelected = () => {
+        const d = new Date();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const todayStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        return selectedDate === todayStr;
+      };
+
+      const finalLocal = isTodaySelected() ? localOnly : [];
+      const merged = [...finalLocal, ...filteredRemote].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setOrders(merged);
       setLoading(false);
     }, start.toISOString(), end.toISOString());
   }, [filter, selectedDate]);

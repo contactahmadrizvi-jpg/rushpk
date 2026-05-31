@@ -7,6 +7,7 @@ import RiderDashboard from "@/components/admin/RiderDashboard";
 import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getPendingKitchenOrders } from "@/lib/pos-instant";
 import { getRevenueByHour } from "@/services/analytics.service";
 import { subscribeOrders } from "@/services/orders.service";
 import { getLowStockItems } from "@/services/inventory.service";
@@ -23,6 +24,7 @@ export default function AdminDashboardPage() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [hourData, setHourData] = useState<{ hour: string; revenue: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [localTrigger, setLocalTrigger] = useState(0);
 
   // Date selection state
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -35,6 +37,16 @@ export default function AdminDashboardPage() {
   const showRider = profile && (profile.role === "delivery_rider" || userHasPermission(profile, "delivery"));
 
   useEffect(() => {
+    const onPending = () => setLocalTrigger((prev) => prev + 1);
+    window.addEventListener("rush-pos-pending", onPending);
+    window.addEventListener("storage", onPending);
+    return () => {
+      window.removeEventListener("rush-pos-pending", onPending);
+      window.removeEventListener("storage", onPending);
+    };
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
 
     const start = new Date(`${selectedDate}T00:00:00`);
@@ -42,8 +54,22 @@ export default function AdminDashboardPage() {
 
     // Subscribe to selected date orders
     const unsub = subscribeOrders((list) => {
-      setOrders(list);
-      setHourData(getRevenueByHour(list));
+      const pendingLocal = getPendingKitchenOrders();
+      const syncedIds = new Set(list.map((o) => o.id));
+      const localOnly = pendingLocal.filter((p) => !syncedIds.has(p.id));
+
+      const isTodaySelected = () => {
+        const d = new Date();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const todayStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        return selectedDate === todayStr;
+      };
+
+      const finalLocal = isTodaySelected() ? localOnly : [];
+      const merged = [...finalLocal, ...list];
+
+      setOrders(merged);
+      setHourData(getRevenueByHour(merged));
       setLoading(false);
     }, start.toISOString(), end.toISOString());
 
@@ -51,7 +77,7 @@ export default function AdminDashboardPage() {
     getLowStockItems().then(items => setLowStockCount(items.length));
 
     return () => unsub();
-  }, [selectedDate]);
+  }, [selectedDate, localTrigger]);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
 

@@ -194,10 +194,7 @@ export default function HomePage() {
                         custom.variantName = v.name;
                       }
                     }
-                    addItem(item, 1, custom);
-                    toast.success(`Added ${item.name} to cart`);
-                  }} 
-                />
+
               ))}
             </div>
           </section>
