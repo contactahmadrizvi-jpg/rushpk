@@ -147,12 +147,6 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      {showRider && (
-        <section className="mt-12">
-          <RiderDashboard />
-        </section>
-      )}
     </div>
   );
 }
