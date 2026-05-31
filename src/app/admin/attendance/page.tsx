@@ -217,10 +217,16 @@ export default function AttendancePage() {
         video: { width: 640, height: 480, facingMode: "user" },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setCameraActive(true);
+
+      const bind = () => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        } else {
+          setTimeout(bind, 50);
+        }
+      };
+      bind();
     } catch (err) {
       console.error(err);
       setCameraError("Unable to access camera. Please check permissions.");
@@ -315,16 +321,21 @@ export default function AttendancePage() {
     };
   }, [cameraActive, modelsLoaded, faceMatcher, staffList, checkingInId, enrollModalOpen]);
 
-  // Enrollment Camera Handling
   const startEnrollCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: "user" },
       });
       enrollStreamRef.current = stream;
-      if (enrollVideoRef.current) {
-        enrollVideoRef.current.srcObject = stream;
-      }
+
+      const bind = () => {
+        if (enrollVideoRef.current) {
+          enrollVideoRef.current.srcObject = stream;
+        } else {
+          setTimeout(bind, 50);
+        }
+      };
+      bind();
     } catch (err) {
       toast.error("Unable to access webcam for enrollment.");
     }
@@ -454,17 +465,16 @@ export default function AttendancePage() {
               </div>
             ) : (
               <div className="flex flex-col items-center space-y-4">
-                {/* Kiosk Camera Feed */}
                 <div className="relative w-full max-w-lg aspect-video rounded-3xl bg-stone-950 border overflow-hidden flex items-center justify-center shadow-inner">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover scale-x-[-1] ${cameraActive ? "block" : "hidden"}`}
+                  />
                   {cameraActive ? (
                     <>
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover scale-x-[-1]"
-                      />
                       {/* Interactive Target Circle overlay */}
                       <div className={`absolute inset-10 border-4 border-dashed rounded-full pointer-events-none transition duration-300 ${
                         faceDetected
@@ -571,46 +581,44 @@ export default function AttendancePage() {
       </Card>
 
       {/* Enrollment Dialog Modal */}
-      {enrollModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-black text-sm text-stone-900">Enroll Face Profile</h3>
-              <button
-                onClick={() => {
-                  setEnrollModalOpen(false);
-                  stopEnrollCamera();
-                }}
-                className="text-xs font-bold text-stone-400 hover:text-stone-600"
-              >
-                Close
-              </button>
-            </div>
-            
-            <div className="relative aspect-video bg-stone-950 rounded-xl overflow-hidden border">
-              <video
-                ref={enrollVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
-            </div>
-            
-            <p className="text-[10px] text-stone-400 text-center leading-relaxed">
-              Ensure you are in well-lit conditions, face the camera directly, and avoid wearing caps or sunglasses.
-            </p>
-
-            <Button
-              className="w-full rounded-xl h-10 font-bold bg-primary text-white"
-              disabled={registeringFace}
-              onClick={handleRegisterFace}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-all duration-200 ${enrollModalOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+        <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4 transform transition-all duration-200">
+          <div className="flex items-center justify-between border-b pb-3">
+            <h3 className="font-black text-sm text-stone-900">Enroll Face Profile</h3>
+            <button
+              onClick={() => {
+                setEnrollModalOpen(false);
+                stopEnrollCamera();
+              }}
+              className="text-xs font-bold text-stone-400 hover:text-stone-600"
             >
-              {registeringFace ? "Processing snapshot..." : "Capture & Enroll Profile"}
-            </Button>
+              Close
+            </button>
           </div>
+          
+          <div className="relative aspect-video bg-stone-950 rounded-xl overflow-hidden border">
+            <video
+              ref={enrollVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover scale-x-[-1]"
+            />
+          </div>
+          
+          <p className="text-[10px] text-stone-400 text-center leading-relaxed">
+            Ensure you are in well-lit conditions, face the camera directly, and avoid wearing caps or sunglasses.
+          </p>
+
+          <Button
+            className="w-full rounded-xl h-10 font-bold bg-primary text-white"
+            disabled={registeringFace}
+            onClick={handleRegisterFace}
+          >
+            {registeringFace ? "Processing snapshot..." : "Capture & Enroll Profile"}
+          </Button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
