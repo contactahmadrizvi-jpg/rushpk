@@ -49,8 +49,20 @@ const MODEL_URL =
   "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/";
 const FACE_API_CDN =
   "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
-const MATCH_THRESHOLD = 0.45; // euclidean distance; lower = stricter
-const DETECT_MS = 600;
+/** Euclidean distance cut-off — LOWER = stricter. 0.38 blocks near-lookalikes. */
+const MATCH_THRESHOLD = 0.38;
+/** Minimum face-detector confidence (0-1). 0.65 filters blurry/partial faces. */
+const DETECT_SCORE_THRESHOLD = 0.65;
+/** Higher input size → better descriptor quality, but slower. */
+const DETECT_INPUT_SIZE: 160 | 224 | 320 | 416 | 512 | 608 = 320;
+/** How often (ms) we run a detection tick while camera is live. */
+const DETECT_MS = 500;
+/** Consecutive matching frames required before attendance is recorded. */
+const REQUIRED_MATCHES = 3;
+/** Consecutive mismatching frames before we hard-reject. */
+const MAX_FAILS = 6;
+/** Frames to capture & average during face enrollment for a robust template. */
+const ENROLL_FRAMES = 5;
 const RESTAURANT_LAT = 31.7131;
 const RESTAURANT_LNG = 73.9724;
 
@@ -123,6 +135,8 @@ export default function AttendancePage() {
   const [ciUser, setCiUser] = useState<AppUser | null>(null);
   const [ciDescriptor, setCiDescriptor] = useState<Float32Array | null>(null);
   const [ciResult, setCiResult] = useState<"matched" | "failed" | null>(null);
+  /** How many consecutive matching frames we've seen (0-REQUIRED_MATCHES). */
+  const [scanProgress, setScanProgress] = useState(0);
 
   // ── enroll flow ──
   const [staffList, setStaffList] = useState<AppUser[]>([]);
@@ -144,6 +158,10 @@ export default function AttendancePage() {
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const processingRef = useRef(false);
   const matchAttemptedRef = useRef(false);
+  /** Running count of consecutive matching frames. */
+  const matchCountRef = useRef(0);
+  /** Running count of consecutive non-matching frames (face present but wrong). */
+  const failCountRef = useRef(0);
 
   // ── bind check-in stream ──
   useEffect(() => {
@@ -239,12 +257,20 @@ export default function AttendancePage() {
 
   // ==========================================================================
   // 3. Face detection ticker (check-in camera)
+  //    Requires REQUIRED_MATCHES consecutive matching frames before confirming.
+  //    Rejects after MAX_FAILS consecutive mismatching frames.
   // ==========================================================================
   useEffect(() => {
     if (ciStep !== "camera" || bootStatus !== "ready" || !ciDescriptor) return;
+
+    // Reset counters every time the camera step starts
     matchAttemptedRef.current = false;
+    matchCountRef.current = 0;
+    failCountRef.current = 0;
+    setScanProgress(0);
 
     const fa = (window as any).faceapi;
+
     const tick = async () => {
       const vid = ciVideoRef.current;
       if (!vid || vid.readyState < 2 || processingRef.current || matchAttemptedRef.current) return;
@@ -254,45 +280,68 @@ export default function AttendancePage() {
         const det = await fa
           .detectSingleFace(
             vid,
-            new fa.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+            new fa.TinyFaceDetectorOptions({
+              inputSize: DETECT_INPUT_SIZE,
+              scoreThreshold: DETECT_SCORE_THRESHOLD,
+            })
           )
           .withFaceLandmarks()
           .withFaceDescriptor();
 
-        if (!det) return; // no face yet
+        if (!det) {
+          // No face detected — reset both streaks so we wait for a clear face
+          matchCountRef.current = 0;
+          failCountRef.current = 0;
+          setScanProgress(0);
+          return;
+        }
 
         const distance = fa.euclideanDistance(ciDescriptor, det.descriptor);
-        matchAttemptedRef.current = true;
 
         if (distance <= MATCH_THRESHOLD) {
-          // ✅ Matched
-          stopCiCamera();
-          setCiResult("matched");
-          setCiStep("matched");
-          playChime(true);
-          toast.success(`✅ Identity verified for ${ciUser!.displayName}`);
+          // ✅ This frame matches — increment match streak, reset fail streak
+          failCountRef.current = 0;
+          matchCountRef.current += 1;
+          setScanProgress(matchCountRef.current);
 
-          // Record attendance
-          try {
-            await checkInGPS(
-              ciUser!.id,
-              ciUser!.displayName,
-              RESTAURANT_LAT,
-              RESTAURANT_LNG,
-              "11:00"
-            );
-            toast.success(`Attendance marked for ${ciUser!.displayName}`);
-            await loadLogs();
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Check-in error");
+          if (matchCountRef.current >= REQUIRED_MATCHES) {
+            // ✅ Enough consecutive matches — confirmed!
+            matchAttemptedRef.current = true;
+            stopCiCamera();
+            setCiResult("matched");
+            setCiStep("matched");
+            playChime(true);
+            toast.success(`✅ Identity verified for ${ciUser!.displayName}`);
+
+            try {
+              await checkInGPS(
+                ciUser!.id,
+                ciUser!.displayName,
+                RESTAURANT_LAT,
+                RESTAURANT_LNG,
+                "11:00"
+              );
+              toast.success(`Attendance marked for ${ciUser!.displayName}`);
+              await loadLogs();
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Check-in error");
+            }
           }
         } else {
-          // ❌ No match
-          stopCiCamera();
-          setCiResult("failed");
-          setCiStep("failed");
-          playChime(false);
-          toast.error("Face does not match this email. Access denied.");
+          // ❌ This frame does NOT match — increment fail streak, reset match streak
+          matchCountRef.current = 0;
+          setScanProgress(0);
+          failCountRef.current += 1;
+
+          if (failCountRef.current >= MAX_FAILS) {
+            // ❌ Too many consecutive mismatches — hard reject
+            matchAttemptedRef.current = true;
+            stopCiCamera();
+            setCiResult("failed");
+            setCiStep("failed");
+            playChime(false);
+            toast.error(`Face does not match. Distance: ${distance.toFixed(3)} (max allowed: ${MATCH_THRESHOLD}). Access denied.`);
+          }
         }
       } finally {
         processingRef.current = false;
@@ -334,12 +383,17 @@ export default function AttendancePage() {
     setCiUser(null);
     setCiDescriptor(null);
     setCiResult(null);
+    setScanProgress(0);
     matchAttemptedRef.current = false;
+    matchCountRef.current = 0;
+    failCountRef.current = 0;
     processingRef.current = false;
   };
 
   // ==========================================================================
-  // 5. Look up employee by email and extract their face descriptor
+  // 5. Look up employee by email and load their face descriptor
+  //    Priority: use pre-computed averaged faceDescriptor from enrollment.
+  //    Fallback: re-detect from the stored photo (legacy / pre-update users).
   // ==========================================================================
   const handleEmailSubmit = async () => {
     if (!ciEmail.trim()) return;
@@ -360,25 +414,42 @@ export default function AttendancePage() {
         return;
       }
 
-      // Extract descriptor from saved face photo
-      const img = await loadImage(user.photoURL);
-      const det = await fa
-        .detectSingleFace(img, new fa.TinyFaceDetectorOptions({ inputSize: 224 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+      let descriptor: Float32Array;
 
-      if (!det) {
-        toast.error("Stored face profile is invalid. Please re-enroll.");
-        setCiStep("email");
-        return;
+      // ── Fast path: use the pre-averaged descriptor stored at enrollment time ──
+      const rawDescriptor = (user as any).faceDescriptor as number[] | undefined;
+      if (rawDescriptor && rawDescriptor.length === 128) {
+        descriptor = new Float32Array(rawDescriptor);
+        toast.info(`Profile loaded for ${user.displayName}. Opening camera…`);
+      } else {
+        // ── Legacy fallback: re-detect from the stored photo ──
+        toast.info(`Loading face profile for ${user.displayName}…`);
+        const img = await loadImage(user.photoURL);
+        const det = await fa
+          .detectSingleFace(
+            img,
+            new fa.TinyFaceDetectorOptions({
+              inputSize: DETECT_INPUT_SIZE,
+              scoreThreshold: 0.5, // more lenient for static images
+            })
+          )
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!det) {
+          toast.error("Stored face profile is invalid. Please re-enroll using the Enroll tab.");
+          setCiStep("email");
+          return;
+        }
+        descriptor = det.descriptor;
+        toast.info(`Profile loaded for ${user.displayName}. Opening camera…`);
       }
 
       setCiUser(user);
-      setCiDescriptor(det.descriptor);
-      toast.info(`Profile loaded for ${user.displayName}. Opening camera…`);
+      setCiDescriptor(descriptor);
       await startCiCamera();
     } catch (e) {
-      toast.error("Error looking up profile. Try again.");
+      toast.error("Error loading profile. Try again.");
       setCiStep("email");
     }
   };
@@ -436,29 +507,68 @@ export default function AttendancePage() {
         });
       }
 
-      const det = await fa
-        .detectSingleFace(vid, new fa.TinyFaceDetectorOptions({ inputSize: 224 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+      // ── Capture ENROLL_FRAMES frames and average their descriptors ──────────
+      // Averaging multiple detections produces a more stable face template
+      // that works better under different lighting conditions.
+      const descriptors: Float32Array[] = [];
+      let snapshot: string | null = null;
 
-      if (!det) {
-        toast.error("No face detected. Position clearly in front of the camera.");
+      for (let i = 0; i < ENROLL_FRAMES; i++) {
+        // Small pause between frames so camera can adjust
+        if (i > 0) await new Promise((r) => setTimeout(r, 200));
+
+        const det = await fa
+          .detectSingleFace(
+            vid,
+            new fa.TinyFaceDetectorOptions({
+              inputSize: DETECT_INPUT_SIZE,
+              scoreThreshold: DETECT_SCORE_THRESHOLD,
+            })
+          )
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!det) {
+          toast.error(
+            `Frame ${i + 1}/${ENROLL_FRAMES}: No face detected. Keep still and look straight at the camera.`
+          );
+          return;
+        }
+
+        descriptors.push(det.descriptor);
+
+        // Take the snapshot from the 3rd frame (camera has had time to adjust)
+        if (i === 2) {
+          const canvas = document.createElement("canvas");
+          canvas.width = vid.videoWidth;
+          canvas.height = vid.videoHeight;
+          canvas.getContext("2d")?.drawImage(vid, 0, 0);
+          snapshot = canvas.toDataURL("image/jpeg", 0.9);
+        }
+      }
+
+      if (descriptors.length < ENROLL_FRAMES) {
+        toast.error("Could not capture enough frames. Please try again.");
         return;
       }
 
-      // Snapshot to base64
-      const canvas = document.createElement("canvas");
-      canvas.width = vid.videoWidth;
-      canvas.height = vid.videoHeight;
-      canvas.getContext("2d")?.drawImage(vid, 0, 0);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      // Average all descriptors element-wise
+      const averaged = new Float32Array(descriptors[0].length);
+      for (const desc of descriptors) {
+        for (let j = 0; j < desc.length; j++) {
+          averaged[j] += desc[j] / descriptors.length;
+        }
+      }
 
+      // Store the averaged descriptor as JSON alongside the snapshot
       await updateDoc(doc(getFirestoreDb(), COLLECTIONS.users, enrollTarget.id), {
-        photoURL: dataUrl,
+        photoURL: snapshot,
+        // Store raw descriptor so check-in can use pre-computed values
+        faceDescriptor: Array.from(averaged),
         updatedAt: new Date().toISOString(),
       });
 
-      toast.success(`✅ ${enrollTarget.displayName}'s face enrolled successfully!`);
+      toast.success(`✅ ${enrollTarget.displayName}'s face enrolled successfully! (${ENROLL_FRAMES} frames averaged)`);
       setEnrolledIds((prev) => new Set([...prev, enrollTarget.id]));
       closeEnroll();
       loadStaff();
@@ -640,7 +750,7 @@ export default function AttendancePage() {
                   />
                   {/* Result overlay on match/fail */}
                   {(ciStep === "matched" || ciStep === "failed") && (
-                    <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm`}>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
                       {ciStep === "matched" ? (
                         <>
                           <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-400" />
@@ -654,10 +764,28 @@ export default function AttendancePage() {
                       )}
                     </div>
                   )}
-                  {/* Live status label */}
+                  {/* Live scanning status + progress bar */}
                   {ciStep === "camera" && (
-                    <div className="absolute bottom-2 inset-x-2 rounded-xl bg-black/70 px-3 py-1.5 text-center text-xs font-bold text-white backdrop-blur">
-                      {ciStatusText}
+                    <div className="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-white/80">Scanning…</span>
+                        <span className="text-[10px] font-black text-amber-300">
+                          {scanProgress}/{REQUIRED_MATCHES} confirmed
+                        </span>
+                      </div>
+                      {/* Progress dots */}
+                      <div className="flex gap-1.5">
+                        {Array.from({ length: REQUIRED_MATCHES }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                              i < scanProgress
+                                ? "bg-emerald-400"
+                                : "bg-white/20"
+                            }`}
+                          />
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
