@@ -50,7 +50,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   cashier: ["pos", "orders"],
   kitchen_staff: ["kitchen", "orders"],
   delivery_rider: ["orders", "delivery"],
-  employee: ["attendance"],
+  employee: [],
   customer: ["website"],
 };
 

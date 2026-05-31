@@ -3,6 +3,7 @@ import type { AppUser, UserRole } from "@/types";
 
 export function resolveUserPermissions(user: AppUser | null | undefined): string[] {
   if (!user) return [];
+  if (user.role === "employee") return [];
   if (user.permissions && user.permissions.length > 0) return user.permissions;
   return ROLE_PERMISSIONS[user.role] ?? [];
 }
