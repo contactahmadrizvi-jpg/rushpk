@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://ruskpk.com";
+  const baseUrl = "https://www.rushpizzaburger.com";
 
   // Define customer-facing routes to index on Google
   const routes = [

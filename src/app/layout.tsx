@@ -28,14 +28,14 @@ export const metadata: Metadata = {
     "dine in sheikhupura",
     "fast food sheikhupura"
   ],
-  metadataBase: new URL("https://ruskpk.com"),
+  metadataBase: new URL("https://www.rushpizzaburger.com"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Rush Pizza and Burger Sheikhupura - Order Food Online | Rusk PK",
+    title: "Rush Pizza and Burger Sheikhupura - Order Food Online",
     description: "Experience the premium taste of pizza and gourmet burgers in Sheikhupura. Swift delivery right to your doorstep.",
-    url: "https://ruskpk.com",
+    url: "https://www.rushpizzaburger.com",
     siteName: "Rush Pizza and Burger",
     images: [
       {
