@@ -265,6 +265,10 @@ export default function POSPage() {
 
     const { order } = buildInstantPosOrder(input);
     const num = order.dailyOrderNumber ?? order.orderNumber;
+    
+    // Auto-print kitchen order ticket (KOT)
+    void printKOT(order);
+
     clearOrder();
     setStreet("");
     setArea("");

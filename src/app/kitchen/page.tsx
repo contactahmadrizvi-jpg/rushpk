@@ -7,7 +7,7 @@ import { cn, formatDate, parseDate } from "@/lib/utils";
 import { subscribeKitchenOrders, updateOrderStatus } from "@/services/orders.service";
 import { subscribeMenuItems } from "@/services/menu.service";
 import { getPendingKitchenOrders } from "@/lib/pos-instant";
-import { playOrderSound, printReceipt } from "@/lib/print";
+import { playOrderSound, printReceipt, printKOT } from "@/lib/print";
 import type { Order, KitchenStatus, MenuItem } from "@/types";
 import { RESTAURANT } from "@/constants";
 import { KitchenColumnsSkeleton } from "@/components/ui/loading-skeletons";
@@ -156,10 +156,18 @@ export default function KitchenPage() {
     try {
       const newSubtotal = editedItems.reduce((sum, item) => sum + item.subtotal, 0);
       const newTotal = newSubtotal - editingOrder.discount;
+      const updatedOrder = {
+        ...editingOrder,
+        items: editedItems,
+        subtotal: newSubtotal,
+        total: newTotal,
+      };
+
       if (editingOrder.id.startsWith("local-")) {
         const m = await import("@/lib/pos-instant");
         m.updatePendingOrderItems(editingOrder.id, editedItems, newSubtotal, newTotal);
         toast.success("Local order updated!");
+        void printKOT(updatedOrder);
         setEditingOrder(null);
         return;
       }
@@ -172,6 +180,7 @@ export default function KitchenPage() {
       });
 
       toast.success("Order updated successfully!");
+      void printKOT(updatedOrder);
       setEditingOrder(null);
     } catch (err) {
       toast.error("Failed to update order");
@@ -264,7 +273,7 @@ export default function KitchenPage() {
                       onClick={() => setKitchen(order.id, "served", order)}
                     >
                       <CheckCircle className="h-4 w-4" />
-                      Prepared & Print Receipt
+                      Proceed
                     </button>
                   </div>
                 </div>
