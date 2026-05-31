@@ -72,6 +72,12 @@ export function CustomerHeader() {
                 Track ({trackedCount})
               </Link>
             )}
+            <a 
+              href={`tel:${RESTAURANT.phone}`} 
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-2 shrink-0"
+            >
+              📞 Call: {RESTAURANT.phone}
+            </a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -143,6 +149,15 @@ export function CustomerHeader() {
                 <Package className="h-4 w-4" />
                 Track order{trackedCount > 0 ? ` (${trackedCount})` : ""}
               </Link>
+              <div className="mt-4 px-2">
+                <a 
+                  href={`tel:${RESTAURANT.phone}`} 
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md hover:bg-primary/95 transition-all text-center w-full"
+                >
+                  📞 Call: {RESTAURANT.phone}
+                </a>
+              </div>
             </nav>
           </div>
         </div>
