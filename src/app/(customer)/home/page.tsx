@@ -194,7 +194,10 @@ export default function HomePage() {
                         custom.variantName = v.name;
                       }
                     }
-
+                    addItem(item, 1, custom);
+                    toast.success(`Added ${item.name} to cart`, { duration: 1500 });
+                  }}
+                />
               ))}
             </div>
           </section>
