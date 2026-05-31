@@ -77,6 +77,12 @@ export default function POSPage() {
   // Active Orders subscription for Table reservations
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
 
+  // Discount Percentage State
+  const [discountPercent, setDiscountPercent] = useState(0);
+
+  // Pending Order Input State for Payment Modal selection
+  const [pendingOrderInput, setPendingOrderInput] = useState<any>(null);
+
   const {
     items,
     orderType,
@@ -123,6 +129,12 @@ export default function POSPage() {
       stopSync();
     };
   }, [profile, router, setCustomer]);
+
+  // Sync discount amount based on subtotal and discount percentage
+  useEffect(() => {
+    const discountVal = Math.round((subtotal * discountPercent) / 100);
+    usePOSStore.setState({ discount: discountVal });
+  }, [subtotal, discountPercent]);
 
   const occupiedTables = useMemo(() => {
     return activeOrders
@@ -204,8 +216,6 @@ export default function POSPage() {
       }
     }
 
-    setPaying(true);
-
     const nameToUse = customerName.trim() || "Walk-in Customer";
     const phoneToUse = customerPhone.trim() || "";
 
@@ -237,7 +247,8 @@ export default function POSPage() {
     const deliveryCharge = orderType === "delivery" ? 150 : 0;
     const finalTotal = total + deliveryCharge;
 
-    const input: CreateOrderInput = {
+    // Save pending input and show payment modal
+    setPendingOrderInput({
       customerName: nameToUse,
       customerPhone: phoneToUse,
       type: orderType,
@@ -247,7 +258,6 @@ export default function POSPage() {
       deliveryCharge,
       discount,
       total: finalTotal,
-      paymentMethod: "cash",
       source: "pos",
       createdBy: profile?.id,
       ...(orderType === "dine_in" && tableNumber ? { tableNumber } : {}),
@@ -261,21 +271,7 @@ export default function POSPage() {
           phone: phoneToUse,
         }
       } : {}),
-    };
-
-    const { order } = buildInstantPosOrder(input);
-    const num = order.dailyOrderNumber ?? order.orderNumber;
-    
-    // Auto-print kitchen order ticket (KOT)
-    void printKOT(order);
-
-    clearOrder();
-    setStreet("");
-    setArea("");
-    setCity("Sheikhupura");
-    setPaying(false);
-    setShowCartMobile(false);
-    toast.success(`Order #${num} sent to Kitchen successfully!`);
+    });
   }, [
     paying,
     items,
@@ -287,13 +283,38 @@ export default function POSPage() {
     total,
     tableNumber,
     profile,
-    clearOrder,
     street,
     area,
     city,
     savedCustomers,
     occupiedTables,
   ]);
+
+  const confirmOrder = useCallback((paymentMethod: "cash" | "card" | "online") => {
+    if (!pendingOrderInput) return;
+    setPaying(true);
+
+    const input: CreateOrderInput = {
+      ...pendingOrderInput,
+      paymentMethod,
+    };
+
+    const { order } = buildInstantPosOrder(input);
+    const num = order.dailyOrderNumber ?? order.orderNumber;
+
+    // Auto-print kitchen order ticket (KOT)
+    void printKOT(order);
+
+    clearOrder();
+    setDiscountPercent(0);
+    setPendingOrderInput(null);
+    setStreet("");
+    setArea("");
+    setCity("Sheikhupura");
+    setPaying(false);
+    setShowCartMobile(false);
+    toast.success(`Order #${num} sent to Kitchen successfully!`);
+  }, [pendingOrderInput, clearOrder]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -483,10 +504,52 @@ export default function POSPage() {
 
       {/* Pay bar */}
       <div className="border-t bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+        {items.length > 0 && (
+          <div className="mb-4 flex items-center justify-between gap-3 bg-stone-50 p-2.5 rounded-xl border border-stone-100/60">
+            <span className="text-xs font-bold text-stone-600 uppercase tracking-wider">Discount (%)</span>
+            <div className="relative w-24">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={discountPercent || ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                  setDiscountPercent(val);
+                }}
+                className="w-full h-9 text-right pr-6 font-bold rounded-lg border border-stone-200 bg-white text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">%</span>
+            </div>
+          </div>
+        )}
+
+        {items.length > 0 && (
+          <div className="mb-4 space-y-1.5 border-b pb-3 border-stone-100 text-xs">
+            <div className="flex justify-between font-semibold text-stone-500">
+              <span>Subtotal</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            {discount > 0 && (
+              <div className="flex justify-between font-bold text-green-600">
+                <span>Discount ({discountPercent}%)</span>
+                <span>-{formatCurrency(discount)}</span>
+              </div>
+            )}
+            {orderType === "delivery" && (
+              <div className="flex justify-between font-semibold text-stone-500">
+                <span>Delivery Charges</span>
+                <span>{formatCurrency(150)}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mb-3 flex items-end justify-between">
           <span className="text-sm font-medium text-stone-500">Total</span>
           <span className="text-3xl font-black tracking-tight text-primary">
-            {formatCurrency(total)}
+            {formatCurrency(total + (orderType === "delivery" ? 150 : 0))}
           </span>
         </div>
         <Button
@@ -501,7 +564,10 @@ export default function POSPage() {
           <button
             type="button"
             className="mt-2 w-full text-center text-sm text-stone-400 hover:text-red-500"
-            onClick={clearOrder}
+            onClick={() => {
+              clearOrder();
+              setDiscountPercent(0);
+            }}
           >
             Clear cart
           </button>
@@ -706,6 +772,50 @@ export default function POSPage() {
               <div className="h-1 w-12 rounded-full bg-stone-200" />
             </div>
             <div className="min-h-0 flex-1">{cartPanel}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Selection Modal */}
+      {pendingOrderInput && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-5">
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-stone-900">
+                Select Payment Method
+              </h3>
+              <p className="text-xs text-stone-500 font-medium">
+                Choose how the customer is paying
+              </p>
+            </div>
+
+            <div className="grid gap-3">
+              {[
+                { id: "cash" as const, label: "💵 Cash", color: "hover:bg-green-50 hover:border-green-400 hover:text-green-700" },
+                { id: "card" as const, label: "💳 Card", color: "hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700" },
+                { id: "online" as const, label: "🌐 Online", color: "hover:bg-purple-50 hover:border-purple-400 hover:text-purple-700" },
+              ].map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  onClick={() => confirmOrder(method.id)}
+                  className={`w-full py-3.5 px-4 rounded-xl border-2 border-stone-200 text-sm font-extrabold text-stone-700 bg-white transition-all active:scale-95 duration-200 text-left flex items-center justify-between ${method.color}`}
+                >
+                  <span className="text-base">{method.label}</span>
+                  <span className="text-[10px] bg-stone-100 text-stone-500 py-0.5 px-2.5 rounded-full font-bold uppercase tracking-wider">Select</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="border-t pt-3">
+              <button
+                type="button"
+                className="w-full py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500 hover:bg-stone-50 active:scale-95 transition"
+                onClick={() => setPendingOrderInput(null)}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
