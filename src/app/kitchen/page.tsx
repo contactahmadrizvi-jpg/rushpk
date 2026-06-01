@@ -201,16 +201,8 @@ export default function KitchenPage() {
     }
   }
 
-  // Print KOT or Bill receipt
+  // Print Bill / Re-Print — always prints directly, never asks for payment method
   async function handlePrintBill(order: Order) {
-    // If order is not paid/settled yet, prompt for payment details first
-    if (!order.paymentStatus || order.paymentStatus === "pending") {
-      setSettlingOrder(order);
-      setPaymentMethod("cash");
-      setCreditName(order.customerName || "");
-      return;
-    }
-
     try {
       if (order.id.startsWith("local-")) {
         const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
@@ -229,7 +221,7 @@ export default function KitchenPage() {
       toast.success("Printing bill...");
       void printReceipt({ ...order, billPrinted: true });
     } catch (err) {
-      toast.error("Failed to update bill print status");
+      toast.error("Failed to print bill");
     }
   }
 
