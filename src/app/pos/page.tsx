@@ -892,23 +892,18 @@ export default function POSPage() {
               </ul>
             )}
           </div>
-
-          {/* Table # (dine-in) */}
           {orderType === "dine_in" && (
-            <div className="relative shrink-0 w-28">
-              <Utensils className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
-              <Input
-                type="number"
-                min="1"
-                className={cn(
-                  "h-10 rounded-xl border-stone-200 bg-stone-50 pl-8 text-sm font-black",
-                  tableNumber != null && occupiedTables.includes(tableNumber) && "border-red-400 bg-red-50"
-                )}
-                placeholder="Table # *"
-                value={tableNumber ?? ""}
-                onChange={(e) => setTableNumber(e.target.value ? Number(e.target.value) : undefined)}
-              />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowDialpad(true)}
+              className={cn(
+                "flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3.5 text-sm font-black transition bg-stone-50 border-stone-200 text-stone-850",
+                tableNumber != null && occupiedTables.includes(tableNumber) && "border-red-300 bg-red-50 text-red-700"
+              )}
+            >
+              <Utensils className="h-4 w-4 text-stone-500" />
+              {tableNumber != null ? `Table #${tableNumber}` : "Table # *"}
+            </button>
           )}
 
           {/* Delivery Address btn */}
@@ -968,8 +963,8 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* ── Row 2: Horizontal scrollable item chips ── */}
-        <div className="flex items-center gap-2 overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* ── Row 2: Horizontal scrollable item cards with discount controls ── */}
+        <div className="flex items-center gap-3 overflow-x-auto px-3 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items.length === 0 ? (
             <div className="flex items-center gap-2 text-stone-400 py-1">
               <ShoppingBag className="h-4 w-4 shrink-0" />
@@ -979,48 +974,106 @@ export default function POSPage() {
             items.map((line) => (
               <div
                 key={line.id}
-                className="flex shrink-0 items-center gap-2 rounded-xl bg-stone-50 border border-stone-200 px-2.5 py-1.5 hover:border-primary/40 transition"
+                className="flex shrink-0 flex-col gap-2 rounded-xl bg-stone-50 border border-stone-200 p-2.5 hover:border-primary/40 transition w-64 shadow-xs"
               >
-                {/* Thumbnail */}
-                <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-stone-100">
-                  <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
-                </div>
-                {/* Name + price */}
-                <div className="min-w-0">
-                  <p className="text-xs font-black text-stone-900 max-w-[90px] truncate">
-                    {line.menuItem.name}
-                    {line.customization?.variantName && (
-                      <span className="ml-1 text-[9px] text-stone-400">({line.customization.variantName})</span>
-                    )}
-                  </p>
-                  <p className="text-xs font-black text-primary">{formatCurrency(line.subtotal)}</p>
-                </div>
-                {/* Qty controls */}
-                <div className="flex items-center gap-1">
+                {/* Top Row: Thumbnail, Name, Price, Remove */}
+                <div className="flex items-center gap-2">
+                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-stone-100 bg-white">
+                    <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-stone-900 truncate leading-tight">
+                      {line.menuItem.name}
+                      {line.customization?.variantName && (
+                        <span className="ml-1 text-[9px] text-stone-400 font-bold">({line.customization.variantName})</span>
+                      )}
+                    </p>
+                    <p className="text-xs font-black text-primary mt-0.5">{formatCurrency(line.subtotal)}</p>
+                  </div>
                   <button
                     type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-200 hover:bg-stone-300 active:scale-90 transition"
-                    onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-55 active:scale-90 transition"
+                    onClick={() => removeItem(line.id)}
                   >
-                    <Minus className="h-3 w-3" />
-                  </button>
-                  <span className="w-5 text-center text-sm font-black text-stone-900">{line.quantity}</span>
-                  <button
-                    type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary/90 active:scale-90 transition"
-                    onClick={() => updateQty(line.id, line.quantity + 1)}
-                  >
-                    <Plus className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                {/* Remove */}
-                <button
-                  type="button"
-                  className="flex h-6 w-6 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition"
-                  onClick={() => removeItem(line.id)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+
+                {/* Bottom Row: Qty Controls + Discount Selector */}
+                <div className="flex items-center justify-between gap-1 border-t border-stone-150 pt-2">
+                  {/* Qty controls */}
+                  <div className="flex items-center gap-0.5 bg-stone-200/50 p-0.5 rounded-lg">
+                    <button
+                      type="button"
+                      className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-stone-700 shadow-xs hover:bg-stone-55 active:scale-90 transition"
+                      onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="w-5 text-center text-xs font-black text-stone-900">{line.quantity}</span>
+                    <button
+                      type="button"
+                      className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white shadow-xs hover:bg-primary/95 active:scale-90 transition"
+                      onClick={() => updateQty(line.id, line.quantity + 1)}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+
+                  {/* Discount controls */}
+                  <div className="flex items-center gap-1">
+                    <div className="flex rounded-md bg-stone-200/50 p-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { updateLineDiscount } = usePOSStore.getState();
+                          updateLineDiscount(line.id, "percent", line.discountValue ?? 0);
+                        }}
+                        className={cn(
+                          "px-1 py-0.5 text-[9px] font-black rounded transition-all",
+                          line.discountType === "percent"
+                            ? "bg-white text-stone-900 shadow-xs"
+                            : "text-stone-500 hover:text-stone-750"
+                        )}
+                      >%</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { updateLineDiscount } = usePOSStore.getState();
+                          updateLineDiscount(line.id, "cash", line.discountValue ?? 0);
+                        }}
+                        className={cn(
+                          "px-1 py-0.5 text-[9px] font-black rounded transition-all",
+                          line.discountType === "cash"
+                            ? "bg-white text-stone-900 shadow-xs"
+                            : "text-stone-500 hover:text-stone-750"
+                        )}
+                      >Rs</button>
+                    </div>
+                    <div className="relative w-12">
+                      <input
+                        type="number"
+                        min="0"
+                        value={line.discountValue || ""}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const { updateLineDiscount } = usePOSStore.getState();
+                          let val = parseInt(e.target.value) || 0;
+                          if (line.discountType === "percent") {
+                            val = Math.min(100, Math.max(0, val));
+                          } else {
+                            val = Math.min(line.unitPrice, Math.max(0, val));
+                          }
+                          updateLineDiscount(line.id, line.discountType || "percent", val);
+                        }}
+                        className="w-full h-6 text-right pr-3 font-bold rounded border border-stone-250 bg-white text-[10px] focus:ring-1 focus:ring-primary focus:outline-none"
+                      />
+                      <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] font-extrabold text-stone-400">
+                        {line.discountType === "percent" ? "%" : "₨"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             ))
           )}
@@ -1064,6 +1117,59 @@ export default function POSPage() {
             </div>
             <Button className="w-full h-12 rounded-xl font-bold" onClick={() => setShowDeliveryModal(false)}>
               ✓ Save Address
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Table Dialpad Modal ── */}
+      {showDialpad && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-stone-900 flex items-center gap-2">
+                <Utensils className="h-4 w-4 text-primary" /> Select Dine-in Table
+              </h3>
+              <button type="button" onClick={() => setShowDialpad(false)} className="text-xs font-bold text-stone-400 hover:text-stone-700">✕ Close</button>
+            </div>
+            
+            <div className="text-center bg-stone-50 py-4 rounded-2xl border border-stone-100">
+              <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Selected Table</span>
+              <p className="text-4xl font-black text-primary mt-1">
+                {tableNumber != null ? `#${tableNumber}` : "—"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
+                const num = k === "back" || k === "C" ? null : Number(k);
+                const isOccupied = num !== null && occupiedTables.includes(num);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => handleDialpadPress(k)}
+                    className={cn(
+                      "flex h-14 items-center justify-center rounded-2xl text-lg font-black shadow-sm active:scale-95 border transition",
+                      isOccupied
+                        ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
+                        : "bg-stone-50 hover:bg-stone-100 border-stone-200/60 text-stone-850"
+                    )}
+                  >
+                    {k === "back" ? "⌫" : k}
+                  </button>
+                );
+              })}
+            </div>
+
+            {occupiedTables.length > 0 && (
+              <div className="text-xs font-semibold text-red-655 bg-red-50 p-3 rounded-2xl border border-red-100 max-h-24 overflow-y-auto">
+                ⚠️ Occupied tables: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
+              </div>
+            )}
+
+            <Button className="w-full h-12 rounded-xl font-bold" onClick={() => setShowDialpad(false)}>
+              ✓ Confirm Table
             </Button>
           </div>
         </div>

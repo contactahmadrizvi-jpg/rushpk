@@ -196,4 +196,8 @@ export async function getTodayOrders(): Promise<Order[]> {
   return orders.filter((o) => o.createdAt >= startIso);
 }
 
+export async function deleteOrder(id: string): Promise<void> {
+  await ordersRepo.delete(id);
+}
+
 export { ordersRepo, paymentsRepo };

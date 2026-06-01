@@ -5,10 +5,19 @@ import { subscribeOrders } from "@/services/orders.service";
 import { formatCurrency } from "@/lib/utils";
 import type { Order } from "@/types";
 import { StatsGridSkeleton } from "@/components/ui/loading-skeletons";
+import { Edit, Trash2 } from "lucide-react";
+import { getFirestoreDb } from "@/lib/firebase/config";
+import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 
 export default function CreditPurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
+
+  // Edit State
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editTotal, setEditTotal] = useState(0);
 
   useEffect(() => {
     const unsub = subscribeOrders((list) => {
@@ -39,6 +48,123 @@ export default function CreditPurchasesPage() {
   );
 
   const totalCredit = creditOrders.reduce((s, o) => s + o.total, 0);
+
+  const handleDelete = async (orderId: string) => {
+    if (!confirm("Are you sure you want to delete this credit purchase?")) return;
+
+    try {
+      // 1. Delete from local storage pos_local_credits if present
+      const localCredits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
+      const filteredCredits = localCredits.filter((lc: any) => lc.id !== orderId);
+      localStorage.setItem("pos_local_credits", JSON.stringify(filteredCredits));
+
+      // 2. Also check pos_pending_orders in local storage
+      const localPending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
+      const filteredPending = localPending.filter((o: any) => o.id !== orderId);
+      localStorage.setItem("pos_pending_orders", JSON.stringify(filteredPending));
+
+      // 3. Delete from Firebase
+      const db = getFirestoreDb();
+      await deleteDoc(doc(db, "orders", orderId));
+      await deleteDoc(doc(db, "credits", orderId));
+
+      window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+      
+      // Update local state directly
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete credit purchase");
+    }
+  };
+
+  const handleStartEdit = (o: Order) => {
+    setEditingOrder(o);
+    setEditName((o as any).creditName || o.customerName || "");
+    setEditPhone(o.customerPhone || "");
+    setEditTotal(o.total);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingOrder) return;
+    try {
+      // 1. Update in local storage if present
+      const localCredits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
+      const updatedLocalCredits = localCredits.map((lc: any) => {
+        if (lc.id === editingOrder.id) {
+          return {
+            ...lc,
+            customerName: editName.trim(),
+            creditName: editName.trim(),
+            total: editTotal,
+          };
+        }
+        return lc;
+      });
+      localStorage.setItem("pos_local_credits", JSON.stringify(updatedLocalCredits));
+
+      // Also update pos_pending_orders in local storage
+      const localPending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
+      const updatedLocalPending = localPending.map((o: any) => {
+        if (o.id === editingOrder.id) {
+          return {
+            ...o,
+            customerName: editName.trim(),
+            creditName: editName.trim(),
+            customerPhone: editPhone.trim(),
+            total: editTotal,
+          };
+        }
+        return o;
+      });
+      localStorage.setItem("pos_pending_orders", JSON.stringify(updatedLocalPending));
+
+      // 2. Update Firebase
+      const db = getFirestoreDb();
+      const orderRef = doc(db, "orders", editingOrder.id);
+      await updateDoc(orderRef, {
+        customerName: editName.trim(),
+        creditName: editName.trim(),
+        customerPhone: editPhone.trim(),
+        total: editTotal,
+      });
+
+      try {
+        const creditRef = doc(db, "credits", editingOrder.id);
+        await updateDoc(creditRef, {
+          customerName: editName.trim(),
+          customerPhone: editPhone.trim(),
+          total: editTotal,
+        });
+      } catch (e) {
+        // Document might not exist in credits collection if it was only locally marked
+        console.warn("Could not update document in credits collection", e);
+      }
+
+      window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+      
+      // Update local state directly
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o.id === editingOrder.id) {
+            return {
+              ...o,
+              customerName: editName.trim(),
+              creditName: editName.trim(),
+              customerPhone: editPhone.trim(),
+              total: editTotal,
+            } as Order;
+          }
+          return o;
+        })
+      );
+
+      setEditingOrder(null);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update credit purchase details");
+    }
+  };
 
   if (loading) {
     return (
@@ -93,6 +219,7 @@ export default function CreditPurchasesPage() {
               <th className="p-4">Items</th>
               <th className="p-4 text-right">Amount</th>
               <th className="p-4">Date</th>
+              <th className="p-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -127,11 +254,31 @@ export default function CreditPurchasesPage() {
                     minute: "2-digit",
                   })}
                 </td>
+                <td className="p-4 text-right">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(o)}
+                      className="p-1.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-600 hover:bg-stone-100 transition active:scale-95"
+                      title="Edit Credit Details"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(o.id)}
+                      className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition active:scale-95"
+                      title="Delete Credit Purchase"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
             {creditOrders.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                <td colSpan={7} className="p-8 text-center text-muted-foreground">
                   No credit purchases found. Credit orders will appear here when settled
                   with the "Credit Sale" option in Kitchen.
                 </td>
@@ -140,6 +287,64 @@ export default function CreditPurchasesPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Edit Modal */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold text-stone-900">Edit Credit Purchase</h3>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-stone-500 uppercase">Debtor / Customer Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="mt-1 w-full h-10 px-3 rounded-lg border border-stone-200 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold text-stone-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-500 uppercase">Phone Number</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="mt-1 w-full h-10 px-3 rounded-lg border border-stone-200 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold text-stone-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-500 uppercase">Credit Amount (Rs.)</label>
+                <input
+                  type="number"
+                  value={editTotal}
+                  onChange={(e) => setEditTotal(Number(e.target.value))}
+                  className="mt-1 w-full h-10 px-3 rounded-lg border border-stone-200 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold text-stone-800"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingOrder(null)}
+                className="px-4 py-2 text-sm font-semibold text-stone-500 hover:text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/95 rounded-lg shadow-sm transition"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

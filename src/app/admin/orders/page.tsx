@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { subscribeOrders } from "@/services/orders.service";
+import { subscribeOrders, deleteOrder } from "@/services/orders.service";
 import { getPendingKitchenOrders } from "@/lib/pos-instant";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { canViewOrders, ordersFilterForUser } from "@/lib/permissions";
 import type { Order } from "@/types";
 import { OrderListSkeleton } from "@/components/ui/loading-skeletons";
+import { Trash2 } from "lucide-react";
 
 function AdminOrdersContent() {
   const profile = useAuthStore((s) => s.profile);
@@ -158,11 +159,27 @@ function AdminOrdersContent() {
                   {o.type.replace("_", " ")} · {o.source}
                 </p>
               </div>
-              <div className="text-right">
+              <div className="text-right flex flex-col items-end">
                 <Badge>{ORDER_STATUS_LABELS[o.status] ?? o.status}</Badge>
                 <p className="mt-2 text-xl font-bold text-primary">
                   {formatCurrency(o.total)}
                 </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (confirm("Are you sure you want to delete this order?")) {
+                      try {
+                        await deleteOrder(o.id);
+                      } catch (err) {
+                        alert("Failed to delete order");
+                      }
+                    }
+                  }}
+                  className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition active:scale-95"
+                  title="Delete Order"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
             <ul className="mt-4 divide-y rounded-lg border bg-muted/30 text-sm">
