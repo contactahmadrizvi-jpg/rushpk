@@ -24,9 +24,9 @@ export type KitchenStatus = "new" | "preparing" | "ready" | "served";
 
 export type OrderType = "dine_in" | "takeaway" | "delivery" | "online";
 
-export type PaymentMethod = "cash" | "online" | "card";
+export type PaymentMethod = "cash" | "online" | "card" | "credit";
 
-export type PaymentStatus = "pending" | "paid" | "refunded";
+export type PaymentStatus = "pending" | "paid" | "refunded" | "credit";
 
 export type InventoryUnit =
   | "kg"
@@ -256,6 +256,8 @@ export interface Order {
   assignedRiderId?: string;
   kotPrinted?: boolean;
   receiptPrinted?: boolean;
+  billPrinted?: boolean;
+  creditName?: string;
   priority?: "normal" | "high";
   createdAt: string;
   updatedAt: string;

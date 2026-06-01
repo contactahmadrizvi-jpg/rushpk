@@ -24,10 +24,11 @@ import { usePOSStore } from "@/stores/pos-store";
 import { subscribeMenuItems, getActiveCategories } from "@/services/menu.service";
 import type { CreateOrderInput } from "@/services/orders.service";
 import { subscribeKitchenOrders } from "@/services/orders.service";
-import { preloadPrintHeader, printPosDocuments, printKOT } from "@/lib/print";
+import { preloadPrintHeader, printKOT } from "@/lib/print";
 import { buildInstantPosOrder } from "@/lib/pos-instant";
 import { startPosSyncWorker } from "@/services/pos-sync.service";
 import { formatCurrency, cn } from "@/lib/utils";
+import { getFirestoreDb } from "@/lib/firebase/config";
 import type { MenuItem, OrderItem, OrderType, MenuCategory } from "@/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { userHasPermission } from "@/lib/permissions";
@@ -64,24 +65,18 @@ export default function POSPage() {
 
   // Delivery Address State
   const [street, setStreet] = useState("");
-  const [area, setArea] = useState("");
   const [city, setCity] = useState("Sheikhupura");
+  const [deliveryCharges, setDeliveryCharges] = useState(150);
 
   // Autocomplete Suggestions State
   const [savedCustomers, setSavedCustomers] = useState<any[]>([]);
   const [phoneSuggestions, setPhoneSuggestions] = useState<any[]>([]);
-
-  // Table Dialpad State
-  const [showDialpad, setShowDialpad] = useState(false);
 
   // Active Orders subscription for Table reservations
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
 
   // Discount Percentage State
   const [discountPercent, setDiscountPercent] = useState(0);
-
-  // Pending Order Input State for Payment Modal selection
-  const [pendingOrderInput, setPendingOrderInput] = useState<any>(null);
 
   const {
     items,
@@ -91,7 +86,6 @@ export default function POSPage() {
     tableNumber,
     discount,
     setOrderType,
-    setTable,
     setTableNumber,
     addItem,
     removeItem,
@@ -162,8 +156,8 @@ export default function POSPage() {
   const selectSuggestion = (s: any) => {
     setCustomer(s.name, s.phone);
     setStreet(s.street || "");
-    setArea(s.area || "");
     setCity(s.city || "Sheikhupura");
+    setDeliveryCharges(s.deliveryCharges || 150);
     setPhoneSuggestions([]);
   };
 
@@ -180,7 +174,7 @@ export default function POSPage() {
     }
   };
 
-  const placeOrder = useCallback(() => {
+  const placeOrder = useCallback(async () => {
     if (paying) return;
     if (!items.length) {
       toast.error("Tap items to add to cart");
@@ -204,11 +198,7 @@ export default function POSPage() {
         return;
       }
       if (!street.trim()) {
-        toast.error("Street / House No. is required for delivery orders");
-        return;
-      }
-      if (!area.trim()) {
-        toast.error("Area is required for delivery orders");
+        toast.error("Street / House No. / Address is required for delivery orders");
         return;
       }
       if (!city.trim()) {
@@ -226,8 +216,8 @@ export default function POSPage() {
         phone: phoneToUse,
         name: nameToUse,
         street,
-        area,
         city,
+        deliveryCharges,
       };
       const filteredList = savedCustomers.filter((c: any) => c.phone !== phoneToUse);
       const updatedList = [newSaved, ...filteredList];
@@ -245,11 +235,12 @@ export default function POSPage() {
       subtotal: line.subtotal,
     }));
 
-    const deliveryCharge = orderType === "delivery" ? 150 : 0;
+    const deliveryCharge = orderType === "delivery" ? deliveryCharges : 0;
     const finalTotal = total + deliveryCharge;
 
-    // Save pending input and show payment modal
-    setPendingOrderInput({
+    setPaying(true);
+
+    const inputData: CreateOrderInput = {
       customerName: nameToUse,
       customerPhone: phoneToUse,
       type: orderType,
@@ -260,6 +251,9 @@ export default function POSPage() {
       discount,
       total: finalTotal,
       source: "pos",
+      paymentMethod: "cash",
+      status: "received",
+      kitchenStatus: "new",
       createdBy: profile?.id,
       ...(orderType === "dine_in" && tableNumber ? { tableNumber } : {}),
       ...(orderType === "delivery" ? {
@@ -267,12 +261,66 @@ export default function POSPage() {
           id: "pos-delivery",
           label: "POS Delivery",
           street,
-          area,
+          area: "",
           city,
           phone: phoneToUse,
         }
       } : {}),
-    });
+    };
+
+    try {
+      const { order } = buildInstantPosOrder(inputData);
+      const num = order.dailyOrderNumber ?? order.orderNumber;
+
+      // Auto-print kitchen order ticket (KOT)
+      await printKOT(order);
+
+      // Ask if KOT printed successfully
+      const confirmed = window.confirm(
+        `Did you successfully print the kitchen order ticket (KOT)?\nClick 'OK' to send Order #${num} to kitchen, or 'Cancel' to discard the order.`
+      );
+
+      if (!confirmed) {
+        const m = await import("@/lib/pos-instant");
+        m.removePendingByLocalId(order.id);
+        window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+        toast.error("Order printing cancelled. Order was not sent to kitchen.");
+        setPaying(false);
+        return;
+      }
+
+      // If it is a delivery order, save daily delivery order to global deliveries collection in background
+      if (orderType === "delivery") {
+        try {
+          const { doc: fsDoc, setDoc } = await import("firebase/firestore");
+          const deliveryRef = fsDoc(getFirestoreDb(), "deliveries", order.id);
+          await setDoc(deliveryRef, {
+            orderId: order.id,
+            orderNumber: num,
+            customerName: nameToUse,
+            customerPhone: phoneToUse,
+            address: `${street}, ${city}`,
+            deliveryCharge,
+            total: finalTotal,
+            createdAt: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.error("Failed to save delivery order info globally:", e);
+        }
+      }
+
+      clearOrder();
+      setDiscountPercent(0);
+      setStreet("");
+      setCity("Sheikhupura");
+      setDeliveryCharges(150);
+      setPaying(false);
+      setShowCartMobile(false);
+      toast.success(`Order #${num} sent to Kitchen successfully!`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to submit order");
+      setPaying(false);
+    }
   }, [
     paying,
     items,
@@ -285,49 +333,13 @@ export default function POSPage() {
     tableNumber,
     profile,
     street,
-    area,
     city,
+    deliveryCharges,
     savedCustomers,
     occupiedTables,
+    clearOrder,
   ]);
 
-  const confirmOrder = useCallback(async (paymentMethod: "cash" | "card" | "online") => {
-    if (!pendingOrderInput) return;
-    setPaying(true);
-
-    const input: CreateOrderInput = {
-      ...pendingOrderInput,
-      paymentMethod,
-    };
-
-    const { order } = buildInstantPosOrder(input);
-    const num = order.dailyOrderNumber ?? order.orderNumber;
-
-    // Auto-print kitchen order ticket (KOT)
-    await printKOT(order);
-
-    // Ask if print was successful/done or cancelled
-    const confirmed = window.confirm("Did you successfully print the kitchen order ticket (KOT)?\nClick 'OK' to send to kitchen, or 'Cancel' to discard the order.");
-    if (!confirmed) {
-      const m = await import("@/lib/pos-instant");
-      m.removePendingByLocalId(order.id);
-      window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-      toast.error("Order printing cancelled. Order was not sent to kitchen.");
-      setPaying(false);
-      setPendingOrderInput(null);
-      return;
-    }
-
-    clearOrder();
-    setDiscountPercent(0);
-    setPendingOrderInput(null);
-    setStreet("");
-    setArea("");
-    setCity("Sheikhupura");
-    setPaying(false);
-    setShowCartMobile(false);
-    toast.success(`Order #${num} sent to Kitchen successfully!`);
-  }, [pendingOrderInput, clearOrder]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -397,30 +409,37 @@ export default function POSPage() {
 
         {/* Delivery Address fields */}
         {orderType === "delivery" && (
-          <div className="mt-3 space-y-2 border-t pt-3 border-stone-100">
+          <div className="mt-3 space-y-2.5 border-t pt-3 border-stone-100">
             <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
               <MapPin className="h-3.5 w-3.5" /> Delivery Address <span className="text-red-500 font-black">*</span>
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Input
-                className="h-10 rounded-xl border-stone-200 bg-white text-xs"
-                placeholder="Street / House No. *"
+                className="h-11 rounded-xl border-stone-200 bg-white text-xs col-span-2"
+                placeholder="Street / House No. / Address *"
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
               />
-              <Input
-                className="h-10 rounded-xl border-stone-200 bg-white text-xs"
-                placeholder="Area *"
-                value={area}
-                onChange={(e) => setArea(e.target.value)}
-              />
             </div>
-            <Input
-              className="h-10 rounded-xl border-stone-200 bg-white text-xs"
-              placeholder="City *"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input
+                className="h-11 rounded-xl border-stone-200 bg-white text-xs"
+                placeholder="City *"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">Rs.</span>
+                <Input
+                  type="number"
+                  min="0"
+                  className="h-11 rounded-xl border-stone-200 bg-white text-xs pl-9 font-black text-primary"
+                  placeholder="Charges *"
+                  value={deliveryCharges || ""}
+                  onChange={(e) => setDeliveryCharges(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+              </div>
+            </div>
           </div>
         )}        {/* Dine-in Table selections with dialpad */}
         {orderType === "dine_in" && (
@@ -467,47 +486,47 @@ export default function POSPage() {
             <p className="mt-1 text-sm text-stone-400">Tap a product to add</p>
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {items.map((line) => (
               <li
                 key={line.id}
-                className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50/80 p-3 shadow-sm"
+                className="flex items-center gap-4 rounded-3xl border border-stone-150 bg-stone-50/80 p-4 shadow-sm"
               >
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border bg-white">
                   <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-stone-900">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="truncate text-base font-black text-stone-900 leading-tight">
                     {line.menuItem.name}
-                    {line.customization?.variantName && <span className="ml-1 text-xs text-stone-500">({line.customization.variantName})</span>}
+                    {line.customization?.variantName && <span className="ml-1.5 text-xs font-bold text-stone-500">({line.customization.variantName})</span>}
                   </p>
-                  <p className="text-sm font-semibold text-primary">
+                  <p className="text-base font-extrabold text-primary">
                     {formatCurrency(line.subtotal)}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 rounded-xl bg-white p-0.5 shadow-sm">
+                <div className="flex items-center gap-1.5 rounded-2xl bg-white p-1 shadow-sm border">
                   <button
                     type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-100 text-lg font-bold active:scale-95"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-100 text-xl font-bold active:scale-95 transition"
                     onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
                   >
-                    <Minus className="h-4 w-4" />
+                    <Minus className="h-5 w-5" />
                   </button>
-                  <span className="w-8 text-center text-lg font-black">{line.quantity}</span>
+                  <span className="w-9 text-center text-xl font-black text-stone-900">{line.quantity}</span>
                   <button
                     type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white active:scale-95"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white active:scale-95 transition"
                     onClick={() => updateQty(line.id, line.quantity + 1)}
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-5 w-5" />
                   </button>
                 </div>
                 <button
                   type="button"
-                  className="rounded-lg p-2 text-red-500 hover:bg-red-50"
+                  className="rounded-xl p-3 text-red-500 hover:bg-red-50 active:scale-95 transition"
                   onClick={() => removeItem(line.id)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-5 w-5" />
                 </button>
               </li>
             ))}
@@ -553,7 +572,7 @@ export default function POSPage() {
             {orderType === "delivery" && (
               <div className="flex justify-between font-semibold text-stone-500">
                 <span>Delivery Charges</span>
-                <span>{formatCurrency(150)}</span>
+                <span>{formatCurrency(deliveryCharges)}</span>
               </div>
             )}
           </div>
@@ -562,7 +581,7 @@ export default function POSPage() {
         <div className="mb-3 flex items-end justify-between">
           <span className="text-sm font-medium text-stone-500">Total</span>
           <span className="text-3xl font-black tracking-tight text-primary">
-            {formatCurrency(total + (orderType === "delivery" ? 150 : 0))}
+            {formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}
           </span>
         </div>
         <Button
@@ -785,50 +804,6 @@ export default function POSPage() {
               <div className="h-1 w-12 rounded-full bg-stone-200" />
             </div>
             <div className="min-h-0 flex-1">{cartPanel}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Method Selection Modal */}
-      {pendingOrderInput && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-5">
-            <div className="text-center space-y-1">
-              <h3 className="text-lg font-black text-stone-900">
-                Select Payment Method
-              </h3>
-              <p className="text-xs text-stone-500 font-medium">
-                Choose how the customer is paying
-              </p>
-            </div>
-
-            <div className="grid gap-3">
-              {[
-                { id: "cash" as const, label: "💵 Cash", color: "hover:bg-green-50 hover:border-green-400 hover:text-green-700" },
-                { id: "card" as const, label: "💳 Card", color: "hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700" },
-                { id: "online" as const, label: "🌐 Online", color: "hover:bg-purple-50 hover:border-purple-400 hover:text-purple-700" },
-              ].map((method) => (
-                <button
-                  key={method.id}
-                  type="button"
-                  onClick={() => confirmOrder(method.id)}
-                  className={`w-full py-3.5 px-4 rounded-xl border-2 border-stone-200 text-sm font-extrabold text-stone-700 bg-white transition-all active:scale-95 duration-200 text-left flex items-center justify-between ${method.color}`}
-                >
-                  <span className="text-base">{method.label}</span>
-                  <span className="text-[10px] bg-stone-100 text-stone-500 py-0.5 px-2.5 rounded-full font-bold uppercase tracking-wider">Select</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="border-t pt-3">
-              <button
-                type="button"
-                className="w-full py-2.5 rounded-xl border border-stone-200 text-xs font-bold text-stone-500 hover:bg-stone-50 active:scale-95 transition"
-                onClick={() => setPendingOrderInput(null)}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </div>
       )}

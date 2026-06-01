@@ -15,6 +15,8 @@ import {
   Shield,
   X,
   Tag,
+  CreditCard,
+  Bike,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RESTAURANT } from "@/constants";
@@ -33,6 +35,8 @@ const nav = [
   { href: "/admin/roles", icon: Shield, label: "Roles", perm: "roles" },
   { href: "/admin/attendance", icon: Clock, label: "Attendance", perm: "attendance" },
   { href: "/admin/reports", icon: BarChart3, label: "Reports", perm: "reports" },
+  { href: "/admin/credits", icon: CreditCard, label: "Credit Purchases", perm: "orders" },
+  { href: "/admin/deliveries", icon: Bike, label: "Daily Deliveries", perm: "orders" },
   { href: "/pos-kitchen", icon: Monitor, label: "POS & Kitchen", perm: "pos_kitchen" },
   { href: "/admin/settings", icon: Settings, label: "Settings", perm: "settings" },
 ];
