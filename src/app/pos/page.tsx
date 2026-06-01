@@ -58,7 +58,7 @@ export default function POSPage() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
+
   const scrollLeft = () => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollBy({ left: -280, behavior: "smooth" });
@@ -1173,7 +1173,7 @@ export default function POSPage() {
               </h3>
               <button type="button" onClick={() => setShowDialpad(false)} className="text-xs font-bold text-stone-400 hover:text-stone-700">✕ Close</button>
             </div>
-            
+
             <div className="text-center bg-stone-50 py-4 rounded-2xl border border-stone-100">
               <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Selected Table</span>
               <p className="text-4xl font-black text-primary mt-1">
@@ -1205,7 +1205,7 @@ export default function POSPage() {
 
             {occupiedTables.length > 0 && (
               <div className="text-xs font-semibold text-red-655 bg-red-50 p-3 rounded-2xl border border-red-100 max-h-24 overflow-y-auto">
-                ⚠️ Occupied tables: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
+                ⚠️ Occupied tables:. {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
               </div>
             )}
 
