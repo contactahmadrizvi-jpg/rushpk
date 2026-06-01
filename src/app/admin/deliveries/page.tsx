@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { subscribeOrders } from "@/services/orders.service";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import type { Order } from "@/types";
 import { StatsGridSkeleton } from "@/components/ui/loading-skeletons";
 
 export default function DailyDeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [filterType, setFilterType] = useState<"day" | "this_month" | "prev_month">("day");
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
@@ -18,19 +19,38 @@ export default function DailyDeliveriesPage() {
 
   useEffect(() => {
     setLoading(true);
-    const start = new Date(`${selectedDate}T00:00:00`);
-    const end = new Date(`${selectedDate}T23:59:59.999`);
+    let startIso: string;
+    let endIso: string;
+
+    if (filterType === "day") {
+      const start = new Date(`${selectedDate}T00:00:00`);
+      const end = new Date(`${selectedDate}T23:59:59.999`);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    } else if (filterType === "this_month") {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    } else {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    }
 
     const unsub = subscribeOrders(
       (list) => {
         setOrders(list);
         setLoading(false);
       },
-      start.toISOString(),
-      end.toISOString()
+      startIso,
+      endIso
     );
     return () => unsub();
-  }, [selectedDate]);
+  }, [selectedDate, filterType]);
 
   // Filter only delivery orders
   const deliveryOrders = orders.filter(
@@ -46,14 +66,39 @@ export default function DailyDeliveriesPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Daily Deliveries</h1>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-md border bg-background px-3 py-1.5 text-sm"
-          />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Daily Deliveries</h1>
+            <p className="text-sm text-muted-foreground">Loading deliveries...</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-2 rounded-xl bg-stone-100 p-1 border border-stone-200/40">
+              {(["day", "this_month", "prev_month"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setFilterType(t)}
+                  className={cn(
+                    "rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition-all",
+                    filterType === t
+                      ? "bg-white text-stone-900 shadow-sm"
+                      : "text-stone-500 hover:text-stone-800"
+                  )}
+                >
+                  {t === "day" ? "Single Day" : t === "this_month" ? "This Month" : "Prev Month"}
+                </button>
+              ))}
+            </div>
+
+            {filterType === "day" && (
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="h-10 rounded-xl border bg-background px-3 text-sm font-semibold"
+              />
+            )}
+          </div>
         </div>
         <div className="mt-6">
           <StatsGridSkeleton count={3} />
@@ -68,16 +113,41 @@ export default function DailyDeliveriesPage() {
         <div>
           <h1 className="text-2xl font-bold">Daily Deliveries</h1>
           <p className="text-sm text-muted-foreground">
-            View all delivery orders for a given day — customer name, address,
-            charges and totals.
+            {filterType === "day"
+              ? `View all delivery orders for ${selectedDate} — customer name, address, charges and totals.`
+              : filterType === "this_month"
+              ? "View all delivery orders for the current month."
+              : "View all delivery orders for the previous month."}
           </p>
         </div>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-2 rounded-xl bg-stone-100 p-1 border border-stone-200/40">
+            {(["day", "this_month", "prev_month"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setFilterType(t)}
+                className={cn(
+                  "rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition-all",
+                  filterType === t
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-800"
+                )}
+              >
+                {t === "day" ? "Single Day" : t === "this_month" ? "This Month" : "Prev Month"}
+              </button>
+            ))}
+          </div>
+
+          {filterType === "day" && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="h-10 rounded-xl border bg-background px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}

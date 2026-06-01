@@ -246,7 +246,9 @@ export default function POSPage() {
             orderId: order.id, orderNumber: num, customerName: nameToUse, customerPhone: phoneToUse,
             address: `${street}, ${city}`, deliveryCharge, total: finalTotal, createdAt: new Date().toISOString(),
           });
-        } catch (e) { console.error("Failed to save delivery order info globally:", e); }
+        } catch (e) {
+          console.error("Failed to saves delivery order info globally:", e);
+        }
       }
       clearOrder();
       setShowDialpad(false);
