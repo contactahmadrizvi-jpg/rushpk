@@ -19,12 +19,26 @@ import {
 
 const COLORS = ["#dc2f02", "#e85d04", "#f48c06", "#2d6a4f"];
 
+function getRevenueByDay(orders: any[]) {
+  const daysMap: Record<string, number> = {};
+  orders.forEach((o) => {
+    if (o.status === "cancelled") return;
+    const d = new Date(o.createdAt);
+    const key = d.toLocaleDateString("en-PK", { day: "2-digit", month: "short" });
+    daysMap[key] = (daysMap[key] || 0) + o.total;
+  });
+  return Object.entries(daysMap)
+    .map(([day, revenue]) => ({ day, revenue }))
+    .sort((a, b) => new Date(a.day + " " + new Date().getFullYear()).getTime() - new Date(b.day + " " + new Date().getFullYear()).getTime());
+}
+
 export default function AdminDashboardPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [lowStockCount, setLowStockCount] = useState(0);
-  const [hourData, setHourData] = useState<{ hour: string; revenue: number }[]>([]);
+  const [hourData, setHourData] = useState<{ hour?: string; day?: string; revenue: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [localTrigger, setLocalTrigger] = useState(0);
+  const [viewMode, setViewMode] = useState<"day" | "this_month" | "prev_month">("day");
 
   // Date selection state
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -34,7 +48,6 @@ export default function AdminDashboardPage() {
   });
 
   const profile = useAuthStore((s) => s.profile);
-  const showRider = profile && (profile.role === "delivery_rider" || userHasPermission(profile, "delivery"));
 
   useEffect(() => {
     const onPending = () => setLocalTrigger((prev) => prev + 1);
@@ -49,10 +62,23 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     setLoading(true);
 
-    const start = new Date(`${selectedDate}T00:00:00`);
-    const end = new Date(`${selectedDate}T23:59:59.999`);
+    let start: Date;
+    let end: Date;
 
-    // Subscribe to selected date orders
+    if (viewMode === "this_month") {
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (viewMode === "prev_month") {
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else {
+      start = new Date(`${selectedDate}T00:00:00`);
+      end = new Date(`${selectedDate}T23:59:59.999`);
+    }
+
+    // Subscribe to selected range orders
     const unsub = subscribeOrders((list) => {
       const pendingLocal = getPendingKitchenOrders();
       const syncedIds = new Set(list.map((o) => o.id));
@@ -62,14 +88,19 @@ export default function AdminDashboardPage() {
         const d = new Date();
         const pad = (n: number) => String(n).padStart(2, "0");
         const todayStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        return selectedDate === todayStr;
+        return selectedDate === todayStr && viewMode === "day";
       };
 
       const finalLocal = isTodaySelected() ? localOnly : [];
       const merged = [...finalLocal, ...list];
 
       setOrders(merged);
-      setHourData(getRevenueByHour(merged));
+
+      if (viewMode === "day") {
+        setHourData(getRevenueByHour(merged));
+      } else {
+        setHourData(getRevenueByDay(merged) as any);
+      }
       setLoading(false);
     }, start.toISOString(), end.toISOString());
 
@@ -77,7 +108,7 @@ export default function AdminDashboardPage() {
     getLowStockItems().then(items => setLowStockCount(items.length));
 
     return () => unsub();
-  }, [selectedDate, localTrigger]);
+  }, [selectedDate, viewMode, localTrigger]);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
 
@@ -103,8 +134,8 @@ export default function AdminDashboardPage() {
     .reduce((sum, o) => sum + o.total, 0);
 
   const cards = [
-    { label: "Selected Date Revenue", value: formatCurrency(todayRevenue), icon: DollarSign },
-    { label: "Selected Date Orders", value: String(orders.length), icon: ShoppingBag },
+    { label: viewMode === "day" ? "Selected Date Revenue" : "Selected Period Revenue", value: formatCurrency(todayRevenue), icon: DollarSign },
+    { label: viewMode === "day" ? "Selected Date Orders" : "Selected Period Orders", value: String(orders.length), icon: ShoppingBag },
     { label: "Pending Orders Count", value: String(pendingOrders), icon: TrendingUp },
     { label: "Low Stock Alert Items", value: String(lowStockCount), icon: AlertTriangle },
   ];
@@ -123,14 +154,27 @@ export default function AdminDashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Dashboard Overview</h1>
-          <p className="text-sm text-muted-foreground">Select a calendar date to view complete statistics and analytics.</p>
+          <p className="text-sm text-muted-foreground">Select a range or date to view complete statistics and analytics.</p>
         </div>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-850"
-        />
+        <div className="flex items-center gap-3">
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value as any)}
+            className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-850"
+          >
+            <option value="day">Single Day</option>
+            <option value="this_month">This Month</option>
+            <option value="prev_month">Previous Month</option>
+          </select>
+          {viewMode === "day" && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-850"
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -147,11 +191,11 @@ export default function AdminDashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="shadow-sm">
-          <CardHeader><CardTitle className="text-base font-bold">Revenue by Hour</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-bold">{viewMode === "day" ? "Revenue by Hour" : "Revenue by Day"}</CardTitle></CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hourData}>
-                <XAxis dataKey="hour" fontSize={10} />
+                <XAxis dataKey={viewMode === "day" ? "hour" : "day"} fontSize={10} />
                 <YAxis fontSize={10} />
                 <Tooltip formatter={(v: number) => formatCurrency(v)} />
                 <Bar dataKey="revenue" fill="#dc2f02" radius={[4, 4, 0, 0]} />

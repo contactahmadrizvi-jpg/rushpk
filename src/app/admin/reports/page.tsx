@@ -12,6 +12,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sellers, setSellers] = useState<ReturnType<typeof getBestSellers>>([]);
+  const [viewMode, setViewMode] = useState<"day" | "this_month" | "prev_month">("day");
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
@@ -22,8 +23,21 @@ export default function ReportsPage() {
   useEffect(() => {
     setLoading(true);
 
-    const start = new Date(`${selectedDate}T00:00:00`);
-    const end = new Date(`${selectedDate}T23:59:59.999`);
+    let start: Date;
+    let end: Date;
+
+    if (viewMode === "this_month") {
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (viewMode === "prev_month") {
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else {
+      start = new Date(`${selectedDate}T00:00:00`);
+      end = new Date(`${selectedDate}T23:59:59.999`);
+    }
 
     const unsub = subscribeOrders((list) => {
       setOrders(list);
@@ -32,7 +46,7 @@ export default function ReportsPage() {
     }, start.toISOString(), end.toISOString());
 
     return () => unsub();
-  }, [selectedDate]);
+  }, [selectedDate, viewMode]);
 
   function exportCSV() {
     const rows = [["Order", "Customer", "Phone", "Total", "Payment", "Date"]];
@@ -41,7 +55,8 @@ export default function ReportsPage() {
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `sales-${selectedDate}.csv`;
+    const rangeName = viewMode === "day" ? selectedDate : viewMode === "this_month" ? "this-month" : "previous-month";
+    a.download = `sales-${rangeName}.csv`;
     a.click();
   }
 
@@ -55,12 +70,25 @@ export default function ReportsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Reports</h1>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-md border bg-background px-3 py-1.5 text-sm"
-          />
+          <div className="flex items-center gap-3">
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as any)}
+              className="rounded-md border bg-background px-3 py-1.5 text-sm"
+            >
+              <option value="day">Single Day</option>
+              <option value="this_month">This Month</option>
+              <option value="prev_month">Previous Month</option>
+            </select>
+            {viewMode === "day" && (
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="rounded-md border bg-background px-3 py-1.5 text-sm"
+              />
+            )}
+          </div>
         </div>
         <div className="mt-6">
           <StatsGridSkeleton count={3} />
@@ -69,20 +97,38 @@ export default function ReportsPage() {
     );
   }
 
+  const headingDateText =
+    viewMode === "day"
+      ? selectedDate
+      : viewMode === "this_month"
+      ? "This Month"
+      : "Previous Month";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Reports & Sales</h1>
-          <p className="text-sm text-muted-foreground">Select date to analyze revenue performance and best selling items.</p>
+          <p className="text-sm text-muted-foreground">Select date or range to analyze revenue performance and best selling items.</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value as any)}
             className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-850"
-          />
+          >
+            <option value="day">Single Day</option>
+            <option value="this_month">This Month</option>
+            <option value="prev_month">Previous Month</option>
+          </select>
+          {viewMode === "day" && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-md border bg-background px-3 py-1.5 text-sm font-semibold text-stone-850"
+            />
+          )}
           <Button variant="outline" onClick={exportCSV} disabled={!orders.length}>
             Export CSV
           </Button>
@@ -112,7 +158,7 @@ export default function ReportsPage() {
       <div className="grid gap-6 lg:grid-cols-3 mt-6">
         {/* Best Sellers */}
         <div className="lg:col-span-2 space-y-4">
-          <h2 className="font-extrabold text-lg text-stone-900">Best Sellers for {selectedDate}</h2>
+          <h2 className="font-extrabold text-lg text-stone-900">Best Sellers for {headingDateText}</h2>
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b">
@@ -133,7 +179,7 @@ export default function ReportsPage() {
                 {sellers.length === 0 && (
                   <tr>
                     <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                      No sales logged for this date.
+                      No sales logged for this selection.
                     </td>
                   </tr>
                 )}
@@ -152,23 +198,23 @@ export default function ReportsPage() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="font-bold">POS Orders</span>
-              <span className="font-semibold">{orders.filter(o => o.source === "pos").length}</span>
+              <span className="font-semibold">{orders.filter((o) => o.source === "pos").length}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="font-bold">Online / Website</span>
-              <span className="font-semibold">{orders.filter(o => o.source === "website").length}</span>
+              <span className="font-semibold">{orders.filter((o) => o.source === "website").length}</span>
             </div>
             <div className="flex justify-between text-sm border-t pt-3">
               <span className="font-bold">Dine In</span>
-              <span className="font-semibold">{orders.filter(o => o.type === "dine_in").length}</span>
+              <span className="font-semibold">{orders.filter((o) => o.type === "dine_in").length}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="font-bold">Takeaway</span>
-              <span className="font-semibold">{orders.filter(o => o.type === "takeaway").length}</span>
+              <span className="font-semibold">{orders.filter((o) => o.type === "takeaway").length}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="font-bold">Delivery</span>
-              <span className="font-semibold">{orders.filter(o => o.type === "delivery").length}</span>
+              <span className="font-semibold">{orders.filter((o) => o.type === "delivery").length}</span>
             </div>
           </div>
         </div>
