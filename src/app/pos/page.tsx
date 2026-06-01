@@ -481,71 +481,109 @@ export default function POSPage() {
           </div>
         )}
       </div>
+
+      {/* Cart Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-100 bg-stone-50/60">
+        <span className="text-xs font-black uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+          <ShoppingBag className="h-3.5 w-3.5" /> Order Items
+          {items.length > 0 && (
+            <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary text-[9px] font-black text-white px-1">
+              {items.length}
+            </span>
+          )}
+        </span>
+        {items.length > 0 && (
+          <button
+            type="button"
+            className="text-[10px] font-bold text-red-400 hover:text-red-600 transition flex items-center gap-1"
+            onClick={() => clearOrder()}
+          >
+            <Trash2 className="h-3 w-3" /> Clear all
+          </button>
+        )}
+      </div>
+
       {/* Cart list */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {items.length === 0 ? (
-          <div className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/80 p-6 text-center">
-            <ShoppingBag className="h-10 w-10 text-stone-300" />
-            <p className="mt-3 font-medium text-stone-500">Cart is empty</p>
-            <p className="mt-1 text-sm text-stone-400">Tap a product to add</p>
+          <div className="flex h-full min-h-[160px] flex-col items-center justify-center p-6 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-100">
+              <ShoppingBag className="h-7 w-7 text-stone-300" />
+            </div>
+            <p className="font-bold text-stone-400">Cart is empty</p>
+            <p className="mt-1 text-xs text-stone-300">Tap a product to add it</p>
           </div>
         ) : (
-          <ul className="space-y-3">
+          <ul className="divide-y divide-stone-100">
             {items.map((line) => (
-              <li
-                key={line.id}
-                className="flex flex-col gap-2.5 rounded-3xl border border-stone-150 bg-stone-50/80 p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border bg-white">
+              <li key={line.id} className="group px-3 py-2.5 hover:bg-stone-50/80 transition-colors">
+                <div className="flex items-center gap-3">
+                  {/* Small Thumbnail */}
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
                     <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
                   </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate text-base font-black text-stone-900 leading-tight">
+
+                  {/* Name + Price */}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black text-stone-900 leading-tight">
                       {line.menuItem.name}
-                      {line.customization?.variantName && <span className="ml-1.5 text-xs font-bold text-stone-500">({line.customization.variantName})</span>}
+                      {line.customization?.variantName && (
+                        <span className="ml-1 text-[10px] font-semibold text-stone-400 bg-stone-100 rounded px-1">
+                          {line.customization.variantName}
+                        </span>
+                      )}
                     </p>
-                    <p className="text-base font-extrabold text-primary">
-                      {formatCurrency(line.subtotal)}
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <span className="text-sm font-black text-primary">
+                        {formatCurrency(line.subtotal)}
+                      </span>
                       {line.discountAmount ? (
-                        <span className="ml-2 text-xs font-bold text-green-600 line-through opacity-70">
+                        <span className="text-[10px] font-bold text-stone-400 line-through">
                           {formatCurrency(line.unitPrice * line.quantity)}
                         </span>
-                      ) : null}
-                    </p>
+                      ) : (
+                        <span className="text-[10px] text-stone-400">
+                          {formatCurrency(line.unitPrice)} ea
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 rounded-2xl bg-white p-1 shadow-sm border">
+
+                  {/* Qty Controls */}
+                  <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-0.5">
                     <button
                       type="button"
-                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-100 text-xl font-bold active:scale-95 transition"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-stone-700 shadow-sm active:scale-90 transition hover:bg-stone-50"
                       onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
                     >
-                      <Minus className="h-5 w-5" />
+                      <Minus className="h-3.5 w-3.5" />
                     </button>
-                    <span className="w-9 text-center text-xl font-black text-stone-900">{line.quantity}</span>
+                    <span className="w-6 text-center text-sm font-black text-stone-900">{line.quantity}</span>
                     <button
                       type="button"
-                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white active:scale-95 transition"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white shadow-sm active:scale-90 transition"
                       onClick={() => updateQty(line.id, line.quantity + 1)}
                     >
-                      <Plus className="h-5 w-5" />
+                      <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
+
+                  {/* Remove */}
                   <button
                     type="button"
-                    className="rounded-xl p-3 text-red-500 hover:bg-red-50 active:scale-95 transition"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition opacity-0 group-hover:opacity-100"
                     onClick={() => removeItem(line.id)}
                   >
-                    <Trash2 className="h-5 w-5" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
-                {/* Line Item Discount Controls */}
-                <div className="flex items-center justify-between gap-2 border-t pt-2.5 border-stone-100">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-stone-500">Item Discount</span>
+                {/* Inline Discount Controls */}
+                <div className="mt-2 flex items-center justify-between gap-2 pl-[60px]">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-stone-400">Discount</span>
                   <div className="flex items-center gap-1.5">
-                    {/* Toggle button for Percent (%) vs Cash (Rs) */}
-                    <div className="flex rounded-lg bg-stone-100 p-0.5 border">
+                    {/* Toggle % / Rs */}
+                    <div className="flex rounded-md bg-stone-100 p-0.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -553,10 +591,10 @@ export default function POSPage() {
                           updateLineDiscount(line.id, "percent", line.discountValue ?? 0);
                         }}
                         className={cn(
-                          "px-2 py-0.5 text-[10px] font-black rounded-md transition-all",
+                          "px-1.5 py-0.5 text-[9px] font-black rounded transition-all",
                           line.discountType === "percent"
                             ? "bg-white text-stone-900 shadow-xs"
-                            : "text-stone-500 hover:text-stone-700"
+                            : "text-stone-400 hover:text-stone-600"
                         )}
                       >
                         %
@@ -568,17 +606,17 @@ export default function POSPage() {
                           updateLineDiscount(line.id, "cash", line.discountValue ?? 0);
                         }}
                         className={cn(
-                          "px-2 py-0.5 text-[10px] font-black rounded-md transition-all",
+                          "px-1.5 py-0.5 text-[9px] font-black rounded transition-all",
                           line.discountType === "cash"
                             ? "bg-white text-stone-900 shadow-xs"
-                            : "text-stone-500 hover:text-stone-700"
+                            : "text-stone-400 hover:text-stone-600"
                         )}
                       >
                         Rs
                       </button>
                     </div>
-                    {/* Discount value input */}
-                    <div className="relative w-20">
+                    {/* Value input */}
+                    <div className="relative w-16">
                       <input
                         type="number"
                         min="0"
@@ -594,10 +632,10 @@ export default function POSPage() {
                           }
                           updateLineDiscount(line.id, line.discountType || "percent", val);
                         }}
-                        className="w-full h-7 text-right pr-6 font-bold rounded-lg border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full h-6 text-right pr-5 font-bold rounded-md border border-stone-200 bg-white text-[10px] focus:ring-1 focus:ring-primary focus:outline-none"
                       />
-                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-stone-400">
-                        {line.discountType === "percent" ? "%" : "Rs"}
+                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-stone-400">
+                        {line.discountType === "percent" ? "%" : "₨"}
                       </span>
                     </div>
                   </div>
@@ -611,51 +649,38 @@ export default function POSPage() {
       {/* Pay bar */}
       <div className="border-t bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
         {items.length > 0 && (
-          <div className="mb-4 space-y-1.5 border-b pb-3 border-stone-100 text-xs">
-            <div className="flex justify-between font-semibold text-stone-500">
+          <div className="mb-3 space-y-1 rounded-xl bg-stone-50 p-3 border border-stone-100 text-xs">
+            <div className="flex justify-between text-stone-500">
               <span>Subtotal</span>
-              <span>{formatCurrency(originalSubtotal)}</span>
+              <span className="font-semibold">{formatCurrency(originalSubtotal)}</span>
             </div>
             {totalItemDiscounts > 0 && (
               <div className="flex justify-between font-bold text-green-600">
-                <span>Item Discounts</span>
+                <span>Discount</span>
                 <span>-{formatCurrency(totalItemDiscounts)}</span>
               </div>
             )}
             {orderType === "delivery" && (
-              <div className="flex justify-between font-semibold text-stone-500">
-                <span>Delivery Charges</span>
-                <span>{formatCurrency(deliveryCharges)}</span>
+              <div className="flex justify-between text-stone-500">
+                <span>Delivery</span>
+                <span className="font-semibold">{formatCurrency(deliveryCharges)}</span>
               </div>
             )}
+            <div className="flex justify-between border-t border-stone-200 pt-1.5 font-black text-stone-900">
+              <span>Total</span>
+              <span className="text-primary">{formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}</span>
+            </div>
           </div>
         )}
 
-        <div className="mb-3 flex items-end justify-between">
-          <span className="text-sm font-medium text-stone-500">Total</span>
-          <span className="text-3xl font-black tracking-tight text-primary">
-            {formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}
-          </span>
-        </div>
         <Button
           size="lg"
           disabled={paying || !items.length}
-          className="h-14 w-full rounded-2xl text-lg font-bold shadow-lg shadow-primary/25"
+          className="h-14 w-full rounded-2xl text-base font-bold shadow-lg shadow-primary/25"
           onClick={placeOrder}
         >
           {paying ? "Processing..." : `Send to Kitchen · F2`}
         </Button>
-        {items.length > 0 && (
-          <button
-            type="button"
-            className="mt-2 w-full text-center text-sm text-stone-400 hover:text-red-500"
-            onClick={() => {
-              clearOrder();
-            }}
-          >
-            Clear cart
-          </button>
-        )}
       </div>
     </div>
   );
