@@ -71,7 +71,11 @@ export function buildInstantPosOrder(input: CreateOrderInput): PendingPosOrder {
 
   const pending: PendingPosOrder = {
     localId,
-    input,
+    input: {
+      ...input,
+      predefinedDailyOrderNumber: dailyOrderNumber,
+      predefinedOrderNumber: order.orderNumber,
+    },
     order,
     createdAt: now,
     syncAttempts: 0,

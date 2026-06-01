@@ -36,6 +36,8 @@ export interface CreateOrderInput {
   source: Order["source"];
   createdBy?: string;
   skipStockCheck?: boolean;
+  predefinedDailyOrderNumber?: number;
+  predefinedOrderNumber?: string;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
@@ -47,7 +49,15 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   }
 
   const now = new Date().toISOString();
-  const { dailyOrderNumber, orderNumber } = await getNextDailyOrderNumber();
+  
+  let dailyOrderNumber = input.predefinedDailyOrderNumber;
+  let orderNumber = input.predefinedOrderNumber;
+
+  if (dailyOrderNumber == null || !orderNumber) {
+    const next = await getNextDailyOrderNumber();
+    dailyOrderNumber = next.dailyOrderNumber;
+    orderNumber = next.orderNumber;
+  }
 
   const orderData: Omit<Order, "id"> = {
     orderNumber,
