@@ -12,7 +12,22 @@ export default function CreditPurchasesPage() {
 
   useEffect(() => {
     const unsub = subscribeOrders((list) => {
-      setOrders(list);
+      // Merge local storage credits if present
+      let localMapped: Order[] = [];
+      try {
+        const localCredits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
+        localMapped = localCredits.map((lc: any) => ({
+          ...lc,
+          dailyOrderNumber: lc.orderNumber ?? lc.dailyOrderNumber ?? 999,
+          paymentStatus: "credit",
+          paymentMethod: "credit",
+          createdAt: lc.createdAt || new Date().toISOString(),
+        }));
+      } catch (e) {
+        console.error("Failed to parse local credits", e);
+      }
+
+      setOrders([...localMapped, ...list]);
       setLoading(false);
     });
     return () => unsub();

@@ -8,6 +8,9 @@ export interface POSLine {
   customization: CartItemCustomization;
   unitPrice: number;
   subtotal: number;
+  discountType?: "cash" | "percent";
+  discountValue?: number;
+  discountAmount?: number;
   notes?: string;
 }
 
@@ -18,7 +21,7 @@ interface POSState {
   customerName: string;
   customerPhone: string;
   items: POSLine[];
-  discount: number;
+  discount: number; // overall calculated cart discount
   heldOrders: HeldOrder[];
   setOrderType: (type: OrderType) => void;
   setTable: (table: Table | null) => void;
@@ -27,6 +30,7 @@ interface POSState {
   addItem: (item: MenuItem, qty?: number, custom?: CartItemCustomization, notes?: string) => void;
   removeItem: (id: string) => void;
   updateQty: (id: string, qty: number) => void;
+  updateLineDiscount: (id: string, discountType: "cash" | "percent", discountValue: number) => void;
   clearOrder: () => void;
   holdOrder: () => void;
   restoreHeld: (id: string) => void;
@@ -41,6 +45,27 @@ interface HeldOrder {
   orderType: OrderType;
   tableNumber?: number;
   heldAt: string;
+}
+
+export function calcLineSubtotal(unitPrice: number, quantity: number, discountType: "cash" | "percent" = "percent", discountValue = 0) {
+  let discountEach = 0;
+  if (discountType === "percent") {
+    discountEach = Math.round((unitPrice * discountValue) / 100);
+  } else {
+    discountEach = discountValue;
+  }
+  const priceAfterDiscount = Math.max(0, unitPrice - discountEach);
+  return priceAfterDiscount * quantity;
+}
+
+export function calcLineDiscountAmount(unitPrice: number, quantity: number, discountType: "cash" | "percent" = "percent", discountValue = 0) {
+  let discountEach = 0;
+  if (discountType === "percent") {
+    discountEach = Math.round((unitPrice * discountValue) / 100);
+  } else {
+    discountEach = discountValue;
+  }
+  return Math.min(unitPrice, discountEach) * quantity;
 }
 
 function calcPrice(item: MenuItem, custom: CartItemCustomization) {
@@ -82,16 +107,20 @@ export const usePOSStore = create<POSState>((set, get) => ({
         (line) =>
           line.menuItem.id === menuItem.id &&
           !line.notes &&
-          JSON.stringify(line.customization) === JSON.stringify(customization)
+          JSON.stringify(line.customization) === JSON.stringify(customization) &&
+          line.discountType === "percent" &&
+          (line.discountValue ?? 0) === 0
       );
       if (existing) {
+        const nextQty = existing.quantity + quantity;
         return {
           items: s.items.map((line) =>
             line.id === existing.id
               ? {
                   ...line,
-                  quantity: line.quantity + quantity,
-                  subtotal: line.unitPrice * (line.quantity + quantity),
+                  quantity: nextQty,
+                  subtotal: calcLineSubtotal(line.unitPrice, nextQty, line.discountType, line.discountValue),
+                  discountAmount: calcLineDiscountAmount(line.unitPrice, nextQty, line.discountType, line.discountValue),
                 }
               : line
           ),
@@ -106,6 +135,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
             quantity,
             customization,
             unitPrice,
+            discountType: "percent",
+            discountValue: 0,
+            discountAmount: 0,
             subtotal: unitPrice * quantity,
             notes,
           },
@@ -119,7 +151,26 @@ export const usePOSStore = create<POSState>((set, get) => ({
     set((s) => ({
       items: s.items.map((i) =>
         i.id === id
-          ? { ...i, quantity, subtotal: i.unitPrice * quantity }
+          ? {
+              ...i,
+              quantity,
+              subtotal: calcLineSubtotal(i.unitPrice, quantity, i.discountType, i.discountValue),
+              discountAmount: calcLineDiscountAmount(i.unitPrice, quantity, i.discountType, i.discountValue),
+            }
+          : i
+      ),
+    })),
+  updateLineDiscount: (id, discountType, discountValue) =>
+    set((s) => ({
+      items: s.items.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              discountType,
+              discountValue,
+              subtotal: calcLineSubtotal(i.unitPrice, i.quantity, discountType, discountValue),
+              discountAmount: calcLineDiscountAmount(i.unitPrice, i.quantity, discountType, discountValue),
+            }
           : i
       ),
     })),

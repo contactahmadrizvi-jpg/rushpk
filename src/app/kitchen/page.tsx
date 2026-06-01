@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { cn, parseDate } from "@/lib/utils";
+import { cn, parseDate, formatCurrency } from "@/lib/utils";
 import { subscribeKitchenOrders } from "@/services/orders.service";
 import { subscribeMenuItems } from "@/services/menu.service";
 import { getPendingKitchenOrders } from "@/lib/pos-instant";
@@ -76,17 +76,65 @@ export default function KitchenPage() {
   // Set kitchen status to ready (Prepared)
   async function markPrepared(order: Order) {
     try {
-      if (order.id.startsWith("local-")) {
-        const m = await import("@/lib/pos-instant");
-        m.updatePendingOrderStatus(order.id, "ready", "ready", order.paymentMethod);
+      const isPaid = window.confirm(
+        `Is Order #${order.dailyOrderNumber ?? order.orderNumber} already PAID?\n\n` +
+        `- Click 'OK' (Yes) if PAID (This will automatically print the bill and mark it paid).\n` +
+        `- Click 'Cancel' (No) if NOT PAID (This will move it to the Payment Pending tab).`
+      );
+
+      const now = new Date().toISOString();
+      if (isPaid) {
+        // Mark as paid and prepared
+        const fields = {
+          status: "ready" as const,
+          kitchenStatus: "ready" as const,
+          paymentStatus: "paid" as const,
+          updatedAt: now,
+        };
+
+        if (order.id.startsWith("local-")) {
+          const m = await import("@/lib/pos-instant");
+          m.updatePendingOrderStatus(order.id, "ready", "ready", order.paymentMethod);
+          const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
+          const idx = pending.findIndex((o: any) => o.id === order.id);
+          if (idx !== -1) {
+            pending[idx].paymentStatus = "paid";
+            localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
+            window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+          }
+        } else {
+          await updateDoc(doc(getFirestoreDb(), "orders", order.id), fields);
+        }
+
+        toast.success(`Order #${order.dailyOrderNumber ?? order.orderNumber} marked Prepared & Paid!`);
+        
+        // Auto-print receipt/bill
+        void handlePrintBill({ ...order, ...fields });
       } else {
-        await updateDoc(doc(getFirestoreDb(), "orders", order.id), {
-          status: "ready",
-          kitchenStatus: "ready",
-          updatedAt: new Date().toISOString(),
-        });
+        // Mark as unpaid, move to payment pending tab
+        const fields = {
+          status: "ready" as const,
+          kitchenStatus: "ready" as const,
+          paymentStatus: "pending" as const,
+          updatedAt: now,
+        };
+
+        if (order.id.startsWith("local-")) {
+          const m = await import("@/lib/pos-instant");
+          m.updatePendingOrderStatus(order.id, "ready", "ready", order.paymentMethod);
+          const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
+          const idx = pending.findIndex((o: any) => o.id === order.id);
+          if (idx !== -1) {
+            pending[idx].paymentStatus = "pending";
+            localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
+            window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+          }
+        } else {
+          await updateDoc(doc(getFirestoreDb(), "orders", order.id), fields);
+        }
+
+        toast.success(`Order #${order.dailyOrderNumber ?? order.orderNumber} moved to Payment Pending!`);
       }
-      toast.success(`Order #${order.dailyOrderNumber ?? order.orderNumber} marked Prepared!`);
     } catch (err) {
       toast.error("Failed to update status");
     }
@@ -94,6 +142,14 @@ export default function KitchenPage() {
 
   // Print KOT or Bill receipt
   async function handlePrintBill(order: Order) {
+    // If order is not paid/settled yet, prompt for payment details first
+    if (!order.paymentStatus || order.paymentStatus === "pending") {
+      setSettlingOrder(order);
+      setPaymentMethod("cash");
+      setCreditName(order.customerName || "");
+      return;
+    }
+
     try {
       if (order.id.startsWith("local-")) {
         const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
@@ -359,31 +415,45 @@ export default function KitchenPage() {
                   </div>
 
                   {/* Body */}
-                  <div className="flex-1 p-4 space-y-3 min-h-[160px]">
-                    <div className="flex justify-between items-center text-xs text-slate-500 font-bold capitalize">
-                      <span className="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-lg">
-                        {order.type.replace("_", " ")}
-                      </span>
-                      {order.tableNumber != null && (
-                        <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">Table {order.tableNumber}</span>
-                      )}
+                  <div className="flex-1 p-4 space-y-3 min-h-[160px] flex flex-col justify-between">
+                    <div>
+                      <div className="flex flex-wrap gap-1.5 items-center justify-between text-xs text-slate-500 font-bold capitalize">
+                        <div className="flex gap-1.5 items-center flex-wrap">
+                          <span className="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-lg">
+                            {order.type.replace("_", " ")}
+                          </span>
+                          {order.paymentStatus === "pending" && (
+                            <span className="bg-red-50 text-red-600 px-2 py-0.5 text-[9px] font-black uppercase rounded-md border border-red-200">
+                              Unpaid
+                            </span>
+                          )}
+                        </div>
+                        {order.tableNumber != null && (
+                          <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">Table {order.tableNumber}</span>
+                        )}
+                      </div>
+
+                      <ul className="space-y-2.5 border-t border-slate-100 pt-3">
+                        {order.items.map((item, i) => (
+                          <li key={i} className="text-sm font-bold text-slate-800 flex items-start justify-between">
+                            <span>
+                              <span className="text-primary font-black text-base mr-1.5">{item.quantity}×</span>
+                              {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
+                              {item.customization?.notes && (
+                                <span className="mt-0.5 block text-xs font-medium text-amber-700">
+                                  ↳ {item.customization.notes}
+                                </span>
+                              )}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
 
-                    <ul className="space-y-2.5 border-t border-slate-100 pt-3">
-                      {order.items.map((item, i) => (
-                        <li key={i} className="text-sm font-bold text-slate-800 flex items-start justify-between">
-                          <span>
-                            <span className="text-primary font-black text-base mr-1.5">{item.quantity}×</span>
-                            {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
-                            {item.customization?.notes && (
-                              <span className="mt-0.5 block text-xs font-medium text-amber-700">
-                                ↳ {item.customization.notes}
-                              </span>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-xs font-bold text-slate-500">
+                      <span>Order Value:</span>
+                      <span className="text-sm font-black text-slate-800">{formatCurrency(order.total)}</span>
+                    </div>
                   </div>
 
                   {/* Footer Action: Single Action Button */}

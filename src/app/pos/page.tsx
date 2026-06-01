@@ -75,16 +75,12 @@ export default function POSPage() {
   // Active Orders subscription for Table reservations
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
 
-  // Discount Percentage State
-  const [discountPercent, setDiscountPercent] = useState(0);
-
   const {
     items,
     orderType,
     customerName,
     customerPhone,
     tableNumber,
-    discount,
     setOrderType,
     setTableNumber,
     addItem,
@@ -125,12 +121,10 @@ export default function POSPage() {
   }, [profile, router, setCustomer]);
 
   const subtotal = getSubtotal();
-
-  // Sync discount amount based on subtotal and discount percentage
-  useEffect(() => {
-    const discountVal = Math.round((subtotal * discountPercent) / 100);
-    usePOSStore.setState({ discount: discountVal });
-  }, [subtotal, discountPercent]);
+  const originalSubtotal = useMemo(() => items.reduce((s, i) => s + (i.unitPrice * i.quantity), 0), [items]);
+  const totalItemDiscounts = useMemo(() => items.reduce((s, i) => s + (i.discountAmount || 0), 0), [items]);
+  const total = subtotal; // subtotal is already post-discount
+  const discount = totalItemDiscounts;
 
   const occupiedTables = useMemo(() => {
     return activeOrders
@@ -150,7 +144,6 @@ export default function POSPage() {
     return list;
   }, [menu, activeCategory, search]);
 
-  const total = subtotal - discount;
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
 
   const selectSuggestion = (s: any) => {
@@ -245,7 +238,7 @@ export default function POSPage() {
       customerPhone: phoneToUse,
       type: orderType,
       items: orderItems,
-      subtotal,
+      subtotal: originalSubtotal,
       tax: 0,
       deliveryCharge,
       discount,
@@ -310,7 +303,6 @@ export default function POSPage() {
       }
 
       clearOrder();
-      setDiscountPercent(0);
       setStreet("");
       setCity("Sheikhupura");
       setDeliveryCharges(150);
@@ -448,7 +440,7 @@ export default function POSPage() {
               <Utensils className="h-3.5 w-3.5" /> Selected Table: {tableNumber != null ? `#${tableNumber}` : "None"}
             </p>
             {/* Visual Numerical Dialpad inline */}
-            <div className="grid grid-cols-3 gap-1.5 bg-stone-50/50 p-2 rounded-2xl border border-stone-100">
+            <div className="grid grid-cols-3 gap-1 bg-stone-50/50 p-1.5 rounded-xl border border-stone-100">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
                 const num = k === "back" || k === "C" ? null : Number(k);
                 const isOccupied = num !== null && occupiedTables.includes(num);
@@ -458,7 +450,7 @@ export default function POSPage() {
                     type="button"
                     onClick={() => handleDialpadPress(k)}
                     className={cn(
-                      "flex h-10 items-center justify-center rounded-xl text-sm font-black shadow-sm active:scale-95 border",
+                      "flex h-8 items-center justify-center rounded-lg text-xs font-black shadow-xs active:scale-95 border",
                       isOccupied
                         ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
                         : "bg-white text-stone-800 border-stone-100/50 hover:bg-stone-50"
@@ -490,44 +482,114 @@ export default function POSPage() {
             {items.map((line) => (
               <li
                 key={line.id}
-                className="flex items-center gap-4 rounded-3xl border border-stone-150 bg-stone-50/80 p-4 shadow-sm"
+                className="flex flex-col gap-2.5 rounded-3xl border border-stone-150 bg-stone-50/80 p-4 shadow-sm"
               >
-                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border bg-white">
-                  <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="truncate text-base font-black text-stone-900 leading-tight">
-                    {line.menuItem.name}
-                    {line.customization?.variantName && <span className="ml-1.5 text-xs font-bold text-stone-500">({line.customization.variantName})</span>}
-                  </p>
-                  <p className="text-base font-extrabold text-primary">
-                    {formatCurrency(line.subtotal)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 rounded-2xl bg-white p-1 shadow-sm border">
+                <div className="flex items-center gap-4">
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border bg-white">
+                    <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate text-base font-black text-stone-900 leading-tight">
+                      {line.menuItem.name}
+                      {line.customization?.variantName && <span className="ml-1.5 text-xs font-bold text-stone-500">({line.customization.variantName})</span>}
+                    </p>
+                    <p className="text-base font-extrabold text-primary">
+                      {formatCurrency(line.subtotal)}
+                      {line.discountAmount ? (
+                        <span className="ml-2 text-xs font-bold text-green-600 line-through opacity-70">
+                          {formatCurrency(line.unitPrice * line.quantity)}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-2xl bg-white p-1 shadow-sm border">
+                    <button
+                      type="button"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-100 text-xl font-bold active:scale-95 transition"
+                      onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                    >
+                      <Minus className="h-5 w-5" />
+                    </button>
+                    <span className="w-9 text-center text-xl font-black text-stone-900">{line.quantity}</span>
+                    <button
+                      type="button"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white active:scale-95 transition"
+                      onClick={() => updateQty(line.id, line.quantity + 1)}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-100 text-xl font-bold active:scale-95 transition"
-                    onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                    className="rounded-xl p-3 text-red-500 hover:bg-red-50 active:scale-95 transition"
+                    onClick={() => removeItem(line.id)}
                   >
-                    <Minus className="h-5 w-5" />
-                  </button>
-                  <span className="w-9 text-center text-xl font-black text-stone-900">{line.quantity}</span>
-                  <button
-                    type="button"
-                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white active:scale-95 transition"
-                    onClick={() => updateQty(line.id, line.quantity + 1)}
-                  >
-                    <Plus className="h-5 w-5" />
+                    <Trash2 className="h-5 w-5" />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="rounded-xl p-3 text-red-500 hover:bg-red-50 active:scale-95 transition"
-                  onClick={() => removeItem(line.id)}
-                >
-                  <Trash2 className="h-5 w-5" />
-                </button>
+
+                {/* Line Item Discount Controls */}
+                <div className="flex items-center justify-between gap-2 border-t pt-2.5 border-stone-100">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-stone-500">Item Discount</span>
+                  <div className="flex items-center gap-1.5">
+                    {/* Toggle button for Percent (%) vs Cash (Rs) */}
+                    <div className="flex rounded-lg bg-stone-100 p-0.5 border">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { updateLineDiscount } = usePOSStore.getState();
+                          updateLineDiscount(line.id, "percent", line.discountValue ?? 0);
+                        }}
+                        className={cn(
+                          "px-2 py-0.5 text-[10px] font-black rounded-md transition-all",
+                          line.discountType === "percent"
+                            ? "bg-white text-stone-900 shadow-xs"
+                            : "text-stone-500 hover:text-stone-700"
+                        )}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { updateLineDiscount } = usePOSStore.getState();
+                          updateLineDiscount(line.id, "cash", line.discountValue ?? 0);
+                        }}
+                        className={cn(
+                          "px-2 py-0.5 text-[10px] font-black rounded-md transition-all",
+                          line.discountType === "cash"
+                            ? "bg-white text-stone-900 shadow-xs"
+                            : "text-stone-500 hover:text-stone-700"
+                        )}
+                      >
+                        Rs
+                      </button>
+                    </div>
+                    {/* Discount value input */}
+                    <div className="relative w-20">
+                      <input
+                        type="number"
+                        min="0"
+                        value={line.discountValue || ""}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const { updateLineDiscount } = usePOSStore.getState();
+                          let val = parseInt(e.target.value) || 0;
+                          if (line.discountType === "percent") {
+                            val = Math.min(100, Math.max(0, val));
+                          } else {
+                            val = Math.min(line.unitPrice, Math.max(0, val));
+                          }
+                          updateLineDiscount(line.id, line.discountType || "percent", val);
+                        }}
+                        className="w-full h-7 text-right pr-6 font-bold rounded-lg border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                      />
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-stone-400">
+                        {line.discountType === "percent" ? "%" : "Rs"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
@@ -537,36 +599,15 @@ export default function POSPage() {
       {/* Pay bar */}
       <div className="border-t bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
         {items.length > 0 && (
-          <div className="mb-4 flex items-center justify-between gap-3 bg-stone-50 p-2.5 rounded-xl border border-stone-100/60">
-            <span className="text-xs font-bold text-stone-600 uppercase tracking-wider">Discount (%)</span>
-            <div className="relative w-24">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={discountPercent || ""}
-                placeholder="0"
-                onChange={(e) => {
-                  const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-                  setDiscountPercent(val);
-                }}
-                className="w-full h-9 text-right pr-6 font-bold rounded-lg border border-stone-200 bg-white text-sm focus:ring-1 focus:ring-primary focus:outline-none"
-              />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">%</span>
-            </div>
-          </div>
-        )}
-
-        {items.length > 0 && (
           <div className="mb-4 space-y-1.5 border-b pb-3 border-stone-100 text-xs">
             <div className="flex justify-between font-semibold text-stone-500">
               <span>Subtotal</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span>{formatCurrency(originalSubtotal)}</span>
             </div>
-            {discount > 0 && (
+            {totalItemDiscounts > 0 && (
               <div className="flex justify-between font-bold text-green-600">
-                <span>Discount ({discountPercent}%)</span>
-                <span>-{formatCurrency(discount)}</span>
+                <span>Item Discounts</span>
+                <span>-{formatCurrency(totalItemDiscounts)}</span>
               </div>
             )}
             {orderType === "delivery" && (
@@ -598,7 +639,6 @@ export default function POSPage() {
             className="mt-2 w-full text-center text-sm text-stone-400 hover:text-red-500"
             onClick={() => {
               clearOrder();
-              setDiscountPercent(0);
             }}
           >
             Clear cart
@@ -714,7 +754,7 @@ export default function POSPage() {
             </div>
           </div>
 
-          <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto px-3 pb-24 sm:grid-cols-3 sm:px-4 sm:pb-4 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto px-3 pb-24 sm:grid-cols-2 sm:px-4 sm:pb-4 lg:grid-cols-2 xl:grid-cols-3">
             {menuLoading ? (
               <div className="col-span-full p-2">
                 <FoodGridSkeleton count={8} />
@@ -722,7 +762,7 @@ export default function POSPage() {
             ) : filtered.map((item) => (
               <div
                 key={item.id}
-                className="group flex flex-col h-56 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40"
+                className="group flex flex-col h-64 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40"
               >
                 <button
                   type="button"
@@ -735,16 +775,16 @@ export default function POSPage() {
                 >
                   <MenuItemImage src={item.imageUrl} alt={item.name} fill />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent opacity-80" />
-                  <span className="absolute bottom-2.5 left-3 right-3 truncate text-sm font-extrabold text-white drop-shadow-sm">
+                  <span className="absolute bottom-3 left-4 right-4 truncate text-lg font-black text-white drop-shadow-sm">
                     {item.name}
                   </span>
-                  <span className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
-                    <Plus className="h-4 w-4" />
+                  <span className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
+                    <Plus className="h-5 w-5" />
                   </span>
                 </button>
 
                 {item.variants && item.variants.length > 0 ? (
-                  <div className="flex shrink-0 items-center gap-1 bg-stone-50 p-1.5 h-[52px]">
+                  <div className="flex shrink-0 items-center gap-1.5 bg-stone-50 p-2 h-[58px]">
                     {item.variants.map((v) => (
                       <button
                         key={v.id}
@@ -753,7 +793,7 @@ export default function POSPage() {
                           addItem(item, 1, { variantId: v.id, variantName: v.name });
                           if (window.innerWidth < 768) setShowCartMobile(true);
                         }}
-                        className="flex-1 rounded-md bg-white py-1.5 text-[10px] font-bold text-stone-700 shadow-sm ring-1 ring-stone-200 hover:bg-stone-100 active:scale-95 sm:text-xs"
+                        className="flex-1 rounded-lg bg-white py-2 text-xs font-black text-stone-700 shadow-sm ring-1 ring-stone-200 hover:bg-stone-100 active:scale-95 sm:text-sm"
                       >
                         {v.name}
                       </button>
@@ -762,16 +802,16 @@ export default function POSPage() {
                 ) : (
                   <button
                     type="button"
-                    className="flex shrink-0 items-center justify-between bg-white px-3 py-2.5 h-[52px] active:bg-stone-50"
+                    className="flex shrink-0 items-center justify-between bg-white px-4 py-3 h-[58px] active:bg-stone-50"
                     onClick={() => {
                       addItem(item);
                       if (window.innerWidth < 768) setShowCartMobile(true);
                     }}
                   >
-                    <span className="text-base font-black text-primary">
+                    <span className="text-lg font-black text-primary">
                       {formatCurrency(item.price)}
                     </span>
-                    <span className="rounded-lg bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-700">
+                    <span className="rounded-xl bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">
                       + Add
                     </span>
                   </button>
