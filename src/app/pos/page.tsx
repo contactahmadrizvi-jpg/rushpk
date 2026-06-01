@@ -305,7 +305,7 @@ export default function POSPage() {
             createdAt: new Date().toISOString(),
           });
         } catch (e) {
-          console.error("Failed to save delivery order info globally:", e);
+          console.error("Failed to saves delivery order info globally:", e);
         }
       }
 
