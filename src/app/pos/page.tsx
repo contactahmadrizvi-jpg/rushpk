@@ -348,142 +348,9 @@ export default function POSPage() {
 
   const cartPanel = (
     <div className="flex h-full flex-col bg-white relative">
-      {/* Customer — compact */}
-      <div className="border-b bg-gradient-to-br from-orange-50 to-white p-4">
-        <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
-          <User className="h-3.5 w-3.5" /> Customer {orderType === "delivery" ? <span className="text-red-500 font-black">*</span> : "(Optional)"}
-        </p>
-        <div className="grid gap-2 sm:grid-cols-2 relative">
-          <div className="relative">
-            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <Input
-              className="h-11 rounded-xl border-stone-200 bg-white pl-9"
-              placeholder={orderType === "delivery" ? "Name *" : "Name"}
-              value={customerName}
-              onChange={(e) => setCustomer(e.target.value, customerPhone)}
-            />
-          </div>
-          <div className="relative">
-            <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <Input
-              className="h-11 rounded-xl border-stone-200 bg-white pl-9"
-              placeholder={orderType === "delivery" ? "Phone *" : "Phone"}
-              value={customerPhone}
-              onChange={(e) => {
-                const val = e.target.value;
-                setCustomer(customerName, val);
-                if (val.length >= 2) {
-                  const matches = savedCustomers.filter((c) =>
-                    c.phone.toLowerCase().includes(val.toLowerCase())
-                  );
-                  setPhoneSuggestions(matches);
-                } else {
-                  setPhoneSuggestions([]);
-                }
-              }}
-            />
-            {/* suggestions dropdown */}
-            {phoneSuggestions.length > 0 && (
-              <ul className="absolute left-0 right-0 top-12 z-50 max-h-40 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
-                {phoneSuggestions.map((s, idx) => (
-                  <li key={idx}>
-                    <button
-                      type="button"
-                      onClick={() => selectSuggestion(s)}
-                      className="w-full px-3 py-2 text-left text-xs text-stone-800 hover:bg-stone-50 border-b border-stone-50 font-bold"
-                    >
-                      📞 {s.phone} <span className="text-stone-400 font-normal">({s.name})</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
 
-        {/* Delivery Address fields */}
-        {orderType === "delivery" && (
-          <div className="mt-3 space-y-2.5 border-t pt-3 border-stone-100">
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
-              <MapPin className="h-3.5 w-3.5" /> Delivery Address <span className="text-red-500 font-black">*</span>
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Input
-                className="h-11 rounded-xl border-stone-200 bg-white text-xs col-span-2"
-                placeholder="Street / House No. / Address *"
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Input
-                className="h-11 rounded-xl border-stone-200 bg-white text-xs"
-                placeholder="City *"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-              />
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">Rs.</span>
-                <Input
-                  type="number"
-                  min="0"
-                  className="h-11 rounded-xl border-stone-200 bg-white text-xs pl-9 font-black text-primary"
-                  placeholder="Charges *"
-                  value={deliveryCharges || ""}
-                  onChange={(e) => setDeliveryCharges(Math.max(0, parseInt(e.target.value) || 0))}
-                />
-              </div>
-            </div>
-          </div>
-        )}        {/* Dine-in Table selections with dialpad */}
-        {orderType === "dine_in" && (
-          <div className="mt-3 border-t pt-3 border-stone-100 space-y-2">
-            <button
-              type="button"
-              onClick={() => setShowDialpad(!showDialpad)}
-              className="flex w-full items-center justify-between rounded-xl bg-orange-50/70 border border-orange-100/70 px-3 py-2 text-xs font-bold text-orange-850 hover:bg-orange-100/80 transition active:scale-98"
-            >
-              <span className="flex items-center gap-2 uppercase tracking-wider text-orange-850">
-                <Utensils className="h-3.5 w-3.5" /> Table: {tableNumber != null ? `#${tableNumber}` : "Select Table"}
-              </span>
-              <span className="text-[10px] text-orange-600/80 font-black">{showDialpad ? "▲ Hide Dialpad" : "▼ Show Dialpad"}</span>
-            </button>
-
-            {/* Visual Numerical Dialpad inline */}
-            {showDialpad && (
-              <div className="grid grid-cols-3 gap-1 bg-stone-50/50 p-1.5 rounded-xl border border-stone-100 animate-in fade-in slide-in-from-top-1 duration-200">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
-                  const num = k === "back" || k === "C" ? null : Number(k);
-                  const isOccupied = num !== null && occupiedTables.includes(num);
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => handleDialpadPress(k)}
-                      className={cn(
-                        "flex h-8 items-center justify-center rounded-lg text-xs font-black shadow-xs active:scale-95 border",
-                        isOccupied
-                          ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
-                          : "bg-white text-stone-800 border-stone-100/50 hover:bg-stone-50"
-                      )}
-                    >
-                      {k === "back" ? "⌫" : k}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {occupiedTables.length > 0 && (
-              <div className="mt-2 text-[10px] font-bold text-red-600 bg-red-50/60 p-2 rounded-xl border border-red-100/40">
-                ⚠️ Occupied Tables: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Cart Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-100 bg-stone-50/60">
+      {/* ── 1. Cart Header ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-100 bg-stone-50/60 shrink-0">
         <span className="text-xs font-black uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
           <ShoppingBag className="h-3.5 w-3.5" /> Order Items
           {items.length > 0 && (
@@ -503,7 +370,7 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* Cart list */}
+      {/* ── 2. Cart Items List (scrollable) ── */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {items.length === 0 ? (
           <div className="flex h-full min-h-[160px] flex-col items-center justify-center p-6 text-center">
@@ -518,7 +385,7 @@ export default function POSPage() {
             {items.map((line) => (
               <li key={line.id} className="group px-3 py-2.5 hover:bg-stone-50/80 transition-colors">
                 <div className="flex items-center gap-3">
-                  {/* Small Thumbnail */}
+                  {/* Thumbnail */}
                   <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
                     <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
                   </div>
@@ -534,17 +401,13 @@ export default function POSPage() {
                       )}
                     </p>
                     <div className="mt-0.5 flex items-center gap-2">
-                      <span className="text-sm font-black text-primary">
-                        {formatCurrency(line.subtotal)}
-                      </span>
+                      <span className="text-sm font-black text-primary">{formatCurrency(line.subtotal)}</span>
                       {line.discountAmount ? (
                         <span className="text-[10px] font-bold text-stone-400 line-through">
                           {formatCurrency(line.unitPrice * line.quantity)}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-stone-400">
-                          {formatCurrency(line.unitPrice)} ea
-                        </span>
+                        <span className="text-[10px] text-stone-400">{formatCurrency(line.unitPrice)} ea</span>
                       )}
                     </div>
                   </div>
@@ -582,7 +445,6 @@ export default function POSPage() {
                 <div className="mt-2 flex items-center justify-between gap-2 pl-[60px]">
                   <span className="text-[9px] font-black uppercase tracking-wider text-stone-400">Discount</span>
                   <div className="flex items-center gap-1.5">
-                    {/* Toggle % / Rs */}
                     <div className="flex rounded-md bg-stone-100 p-0.5">
                       <button
                         type="button"
@@ -596,9 +458,7 @@ export default function POSPage() {
                             ? "bg-white text-stone-900 shadow-xs"
                             : "text-stone-400 hover:text-stone-600"
                         )}
-                      >
-                        %
-                      </button>
+                      >%</button>
                       <button
                         type="button"
                         onClick={() => {
@@ -611,11 +471,8 @@ export default function POSPage() {
                             ? "bg-white text-stone-900 shadow-xs"
                             : "text-stone-400 hover:text-stone-600"
                         )}
-                      >
-                        Rs
-                      </button>
+                      >Rs</button>
                     </div>
-                    {/* Value input */}
                     <div className="relative w-16">
                       <input
                         type="number"
@@ -646,8 +503,143 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* Pay bar */}
-      <div className="border-t bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+      {/* ── 3. Order Details (Customer / Delivery / Table) ── */}
+      <div className="shrink-0 border-t border-stone-100 bg-gradient-to-br from-orange-50/60 to-white p-4 space-y-3">
+        {/* Section label */}
+        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/60">
+          <User className="h-3.5 w-3.5" /> Order Details
+          {orderType === "delivery" && <span className="text-red-500 font-black text-[10px]">* required</span>}
+        </p>
+
+        {/* Name + Phone */}
+        <div className="grid gap-2 sm:grid-cols-2 relative">
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Input
+              className="h-10 rounded-xl border-stone-200 bg-white pl-9 text-sm"
+              placeholder={orderType === "delivery" ? "Name *" : "Name (optional)"}
+              value={customerName}
+              onChange={(e) => setCustomer(e.target.value, customerPhone)}
+            />
+          </div>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <Input
+              className="h-10 rounded-xl border-stone-200 bg-white pl-9 text-sm"
+              placeholder={orderType === "delivery" ? "Phone *" : "Phone (optional)"}
+              value={customerPhone}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCustomer(customerName, val);
+                if (val.length >= 2) {
+                  const matches = savedCustomers.filter((c) =>
+                    c.phone.toLowerCase().includes(val.toLowerCase())
+                  );
+                  setPhoneSuggestions(matches);
+                } else {
+                  setPhoneSuggestions([]);
+                }
+              }}
+            />
+            {phoneSuggestions.length > 0 && (
+              <ul className="absolute left-0 right-0 bottom-11 z-50 max-h-40 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
+                {phoneSuggestions.map((s, idx) => (
+                  <li key={idx}>
+                    <button
+                      type="button"
+                      onClick={() => selectSuggestion(s)}
+                      className="w-full px-3 py-2 text-left text-xs text-stone-800 hover:bg-stone-50 border-b border-stone-50 font-bold"
+                    >
+                      📞 {s.phone} <span className="text-stone-400 font-normal">({s.name})</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Delivery Address */}
+        {orderType === "delivery" && (
+          <div className="space-y-2 border-t pt-3 border-stone-100/80">
+            <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-orange-800/60">
+              <MapPin className="h-3 w-3" /> Delivery Address
+            </p>
+            <Input
+              className="h-10 rounded-xl border-stone-200 bg-white text-xs"
+              placeholder="Street / House No. / Address *"
+              value={street}
+              onChange={(e) => setStreet(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                className="h-10 rounded-xl border-stone-200 bg-white text-xs"
+                placeholder="City *"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">Rs.</span>
+                <Input
+                  type="number"
+                  min="0"
+                  className="h-10 rounded-xl border-stone-200 bg-white text-xs pl-9 font-black text-primary"
+                  placeholder="Charges"
+                  value={deliveryCharges || ""}
+                  onChange={(e) => setDeliveryCharges(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dine-in Table Dialpad */}
+        {orderType === "dine_in" && (
+          <div className="border-t pt-3 border-stone-100/80 space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowDialpad(!showDialpad)}
+              className="flex w-full items-center justify-between rounded-xl bg-orange-50/70 border border-orange-100/70 px-3 py-2 text-xs font-bold hover:bg-orange-100/80 transition"
+            >
+              <span className="flex items-center gap-2 uppercase tracking-wider text-orange-900/80">
+                <Utensils className="h-3.5 w-3.5" /> Table: {tableNumber != null ? `#${tableNumber}` : "Select Table"}
+              </span>
+              <span className="text-[10px] text-orange-600/80 font-black">{showDialpad ? "▲" : "▼"}</span>
+            </button>
+            {showDialpad && (
+              <div className="grid grid-cols-3 gap-1 bg-stone-50/50 p-1.5 rounded-xl border border-stone-100 animate-in fade-in slide-in-from-top-1 duration-200">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
+                  const num = k === "back" || k === "C" ? null : Number(k);
+                  const isOccupied = num !== null && occupiedTables.includes(num);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => handleDialpadPress(k)}
+                      className={cn(
+                        "flex h-8 items-center justify-center rounded-lg text-xs font-black shadow-xs active:scale-95 border",
+                        isOccupied
+                          ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
+                          : "bg-white text-stone-800 border-stone-100/50 hover:bg-stone-50"
+                      )}
+                    >
+                      {k === "back" ? "⌫" : k}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {occupiedTables.length > 0 && (
+              <div className="text-[10px] font-bold text-red-600 bg-red-50/60 p-2 rounded-xl border border-red-100/40">
+                ⚠️ Occupied: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── 4. Pay Bar ── */}
+      <div className="shrink-0 border-t bg-white p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
         {items.length > 0 && (
           <div className="mb-3 space-y-1 rounded-xl bg-stone-50 p-3 border border-stone-100 text-xs">
             <div className="flex justify-between text-stone-500">
@@ -672,7 +664,6 @@ export default function POSPage() {
             </div>
           </div>
         )}
-
         <Button
           size="lg"
           disabled={paying || !items.length}
