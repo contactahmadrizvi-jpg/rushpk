@@ -36,6 +36,12 @@ export default function KitchenPage() {
   const [paymentMethod, setPaymentMethod] = useState<Order["paymentMethod"]>("cash");
   const [creditName, setCreditName] = useState("");
 
+  // Prepared confirmation modal state
+  const [preparedOrder, setPreparedOrder] = useState<Order | null>(null);
+  const [preparedStep, setPreparedStep] = useState<"ask_paid" | "select_payment" | "credit_details">("ask_paid");
+  const [preparedPaymentMethod, setPreparedPaymentMethod] = useState<Order["paymentMethod"]>("cash");
+  const [preparedCreditName, setPreparedCreditName] = useState("");
+
   useEffect(() => {
     let remote: Order[] = [];
 
@@ -74,69 +80,124 @@ export default function KitchenPage() {
   }, []);
 
   // Set kitchen status to ready (Prepared)
-  async function markPrepared(order: Order) {
+  function markPrepared(order: Order) {
+    setPreparedOrder(order);
+    setPreparedStep("ask_paid");
+    setPreparedPaymentMethod("cash");
+    setPreparedCreditName(order.customerName || "");
+  }
+
+  // Move prepared order to Payment Pending (Unpaid)
+  async function handlePreparedUnpaid() {
+    if (!preparedOrder) return;
     try {
-      const isPaid = window.confirm(
-        `Is Order #${order.dailyOrderNumber ?? order.orderNumber} already PAID?\n\n` +
-        `- Click 'OK' (Yes) if PAID (This will automatically print the bill and mark it paid).\n` +
-        `- Click 'Cancel' (No) if NOT PAID (This will move it to the Payment Pending tab).`
-      );
-
       const now = new Date().toISOString();
-      if (isPaid) {
-        // Mark as paid and prepared
-        const fields = {
-          status: "ready" as const,
-          kitchenStatus: "ready" as const,
-          paymentStatus: "paid" as const,
-          updatedAt: now,
-        };
+      const fields = {
+        status: "ready" as const,
+        kitchenStatus: "ready" as const,
+        paymentStatus: "pending" as const,
+        updatedAt: now,
+      };
 
-        if (order.id.startsWith("local-")) {
-          const m = await import("@/lib/pos-instant");
-          m.updatePendingOrderStatus(order.id, "ready", "ready", order.paymentMethod);
-          const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
-          const idx = pending.findIndex((o: any) => o.id === order.id);
-          if (idx !== -1) {
-            pending[idx].paymentStatus = "paid";
-            localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
-            window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-          }
-        } else {
-          await updateDoc(doc(getFirestoreDb(), "orders", order.id), fields);
+      if (preparedOrder.id.startsWith("local-")) {
+        const m = await import("@/lib/pos-instant");
+        m.updatePendingOrderStatus(preparedOrder.id, "ready", "ready", preparedOrder.paymentMethod);
+        const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
+        const idx = pending.findIndex((o: any) => o.id === preparedOrder.id);
+        if (idx !== -1) {
+          pending[idx].paymentStatus = "pending";
+          localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
+          window.dispatchEvent(new CustomEvent("rush-pos-pending"));
         }
-
-        toast.success(`Order #${order.dailyOrderNumber ?? order.orderNumber} marked Prepared & Paid!`);
-        
-        // Auto-print receipt/bill
-        void handlePrintBill({ ...order, ...fields });
       } else {
-        // Mark as unpaid, move to payment pending tab
-        const fields = {
-          status: "ready" as const,
-          kitchenStatus: "ready" as const,
-          paymentStatus: "pending" as const,
-          updatedAt: now,
-        };
-
-        if (order.id.startsWith("local-")) {
-          const m = await import("@/lib/pos-instant");
-          m.updatePendingOrderStatus(order.id, "ready", "ready", order.paymentMethod);
-          const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
-          const idx = pending.findIndex((o: any) => o.id === order.id);
-          if (idx !== -1) {
-            pending[idx].paymentStatus = "pending";
-            localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
-            window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-          }
-        } else {
-          await updateDoc(doc(getFirestoreDb(), "orders", order.id), fields);
-        }
-
-        toast.success(`Order #${order.dailyOrderNumber ?? order.orderNumber} moved to Payment Pending!`);
+        await updateDoc(doc(getFirestoreDb(), "orders", preparedOrder.id), fields);
       }
+
+      toast.success(`Order #${preparedOrder.dailyOrderNumber ?? preparedOrder.orderNumber} moved to Payment Pending!`);
+      setPreparedOrder(null);
     } catch (err) {
       toast.error("Failed to update status");
+    }
+  }
+
+  // Confirm prepared order as PAID and optionally Credit
+  async function handlePreparedPaid() {
+    if (!preparedOrder) return;
+    
+    // Credit Validation
+    if (preparedPaymentMethod === "credit" && !preparedCreditName.trim()) {
+      toast.error("Please enter customer name for Credit Sale");
+      return;
+    }
+
+    try {
+      const now = new Date().toISOString();
+      const fields = {
+        status: "ready" as const,
+        kitchenStatus: "ready" as const,
+        paymentStatus: (preparedPaymentMethod === "credit" ? "credit" : "paid") as "credit" | "paid",
+        paymentMethod: preparedPaymentMethod,
+        updatedAt: now,
+        ...(preparedPaymentMethod === "credit" ? {
+          customerName: preparedCreditName.trim(),
+          creditName: preparedCreditName.trim(),
+        } : {}),
+      };
+
+      if (preparedOrder.id.startsWith("local-")) {
+        const m = await import("@/lib/pos-instant");
+        m.updatePendingOrderStatus(preparedOrder.id, "ready", "ready", preparedPaymentMethod);
+        const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
+        const idx = pending.findIndex((o: any) => o.id === preparedOrder.id);
+        if (idx !== -1) {
+          pending[idx].paymentStatus = preparedPaymentMethod === "credit" ? "credit" : "paid";
+          pending[idx].paymentMethod = preparedPaymentMethod;
+          if (preparedPaymentMethod === "credit") {
+            pending[idx].customerName = preparedCreditName.trim();
+            pending[idx].creditName = preparedCreditName.trim();
+          }
+          localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
+          window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+        }
+
+        // Save offline local credit
+        if (preparedPaymentMethod === "credit") {
+          const credits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
+          credits.push({
+            id: preparedOrder.id,
+            customerName: preparedCreditName.trim(),
+            total: preparedOrder.total,
+            items: preparedOrder.items,
+            createdAt: now,
+          });
+          localStorage.setItem("pos_local_credits", JSON.stringify(credits));
+        }
+      } else {
+        await updateDoc(doc(getFirestoreDb(), "orders", preparedOrder.id), fields);
+
+        // Save credit globally
+        if (preparedPaymentMethod === "credit") {
+          const { doc: fsDoc, setDoc } = await import("firebase/firestore");
+          const creditRef = fsDoc(getFirestoreDb(), "credits", preparedOrder.id);
+          await setDoc(creditRef, {
+            orderId: preparedOrder.id,
+            orderNumber: preparedOrder.dailyOrderNumber ?? preparedOrder.orderNumber,
+            customerName: preparedCreditName.trim(),
+            customerPhone: preparedOrder.customerPhone || "",
+            total: preparedOrder.total,
+            items: preparedOrder.items,
+            createdAt: now,
+          });
+        }
+      }
+
+      toast.success(`Order #${preparedOrder.dailyOrderNumber ?? preparedOrder.orderNumber} marked Prepared & Paid!`);
+      setPreparedOrder(null);
+      
+      // Auto-print receipt/bill
+      void handlePrintBill({ ...preparedOrder, ...fields });
+    } catch (err) {
+      toast.error("Failed to mark prepared & paid");
     }
   }
 
@@ -685,6 +746,124 @@ export default function KitchenPage() {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prepared Confirmation Modal */}
+      {preparedOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-base font-black text-stone-900">
+                Prepared Ticket — Order #{preparedOrder.dailyOrderNumber ?? preparedOrder.orderNumber}
+              </h3>
+              <button
+                type="button"
+                className="text-xs font-bold text-stone-400 hover:text-stone-600 transition"
+                onClick={() => setPreparedOrder(null)}
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {preparedStep === "ask_paid" && (
+              <div className="space-y-5">
+                <p className="text-sm font-semibold text-stone-600 text-center py-2">
+                  Has this order already been <strong className="text-stone-900">Paid</strong>, or is the payment <strong className="text-stone-900">Pending / Unpaid</strong>?
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePreparedUnpaid}
+                    className="flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-red-200 bg-red-50/50 hover:bg-red-50 text-red-700 font-extrabold text-sm active:scale-95 transition gap-2"
+                  >
+                    <span className="text-2xl">🕒</span>
+                    <span>Unpaid / Pending</span>
+                    <span className="text-[10px] text-red-500 font-medium normal-case">Moves to Payment Pending</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreparedStep("select_payment")}
+                    className="flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-green-200 bg-green-50/50 hover:bg-green-50 text-green-700 font-extrabold text-sm active:scale-95 transition gap-2"
+                  >
+                    <span className="text-2xl">💵</span>
+                    <span>Paid / Settled</span>
+                    <span className="text-[10px] text-green-500 font-medium normal-case">Record payment method</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {preparedStep === "select_payment" && (
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-stone-500 uppercase tracking-wider">Select Payment Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "cash" as const, label: "💵 Cash" },
+                    { id: "card" as const, label: "💳 Card" },
+                    { id: "online" as const, label: "🌐 Online" },
+                    { id: "credit" as const, label: "📝 Credit Sale" },
+                  ].map((method) => (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => {
+                        if (method.id === "credit") {
+                          setPreparedPaymentMethod("credit");
+                          setPreparedStep("credit_details");
+                        } else {
+                          setPreparedPaymentMethod(method.id);
+                        }
+                      }}
+                      className={cn(
+                        "py-3 px-4 rounded-xl border-2 text-sm font-black transition-all text-left flex items-center justify-between active:scale-98",
+                        preparedPaymentMethod === method.id
+                          ? "border-primary bg-orange-50/50 text-stone-900"
+                          : "border-stone-200 text-stone-700 bg-white hover:bg-stone-50"
+                      )}
+                    >
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+
+                {preparedPaymentMethod !== "credit" && (
+                  <div className="flex gap-2 border-t pt-4">
+                    <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => setPreparedStep("ask_paid")}>
+                      Back
+                    </Button>
+                    <Button className="flex-1 rounded-xl font-bold bg-green-600 hover:bg-green-700 active:scale-95 transition" onClick={handlePreparedPaid}>
+                      Confirm Paid
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {preparedStep === "credit_details" && (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-500 uppercase tracking-wider">Debtor / Customer Name *</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter customer/debtor name..."
+                    value={preparedCreditName}
+                    onChange={(e) => setPreparedCreditName(e.target.value)}
+                    className="h-11 text-xs rounded-xl border bg-white px-3 font-semibold focus:ring-primary focus:border-primary"
+                  />
+                </div>
+
+                <div className="flex gap-2 border-t pt-4">
+                  <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => setPreparedStep("select_payment")}>
+                    Back
+                  </Button>
+                  <Button className="flex-1 rounded-xl font-bold bg-orange-600 hover:bg-orange-700 active:scale-95 transition" onClick={handlePreparedPaid}>
+                    Confirm Credit & Print
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

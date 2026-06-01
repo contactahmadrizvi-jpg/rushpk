@@ -62,6 +62,7 @@ export default function POSPage() {
   const [paying, setPaying] = useState(false);
   const [menuLoading, setMenuLoading] = useState(true);
   const [showCartMobile, setShowCartMobile] = useState(false);
+  const [showDialpad, setShowDialpad] = useState(false);
 
   // Delivery Address State
   const [street, setStreet] = useState("");
@@ -303,6 +304,7 @@ export default function POSPage() {
       }
 
       clearOrder();
+      setShowDialpad(false);
       setStreet("");
       setCity("Sheikhupura");
       setDeliveryCharges(150);
@@ -436,31 +438,41 @@ export default function POSPage() {
         )}        {/* Dine-in Table selections with dialpad */}
         {orderType === "dine_in" && (
           <div className="mt-3 border-t pt-3 border-stone-100 space-y-2">
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/70">
-              <Utensils className="h-3.5 w-3.5" /> Selected Table: {tableNumber != null ? `#${tableNumber}` : "None"}
-            </p>
+            <button
+              type="button"
+              onClick={() => setShowDialpad(!showDialpad)}
+              className="flex w-full items-center justify-between rounded-xl bg-orange-50/70 border border-orange-100/70 px-3 py-2 text-xs font-bold text-orange-850 hover:bg-orange-100/80 transition active:scale-98"
+            >
+              <span className="flex items-center gap-2 uppercase tracking-wider text-orange-850">
+                <Utensils className="h-3.5 w-3.5" /> Table: {tableNumber != null ? `#${tableNumber}` : "Select Table"}
+              </span>
+              <span className="text-[10px] text-orange-600/80 font-black">{showDialpad ? "▲ Hide Dialpad" : "▼ Show Dialpad"}</span>
+            </button>
+
             {/* Visual Numerical Dialpad inline */}
-            <div className="grid grid-cols-3 gap-1 bg-stone-50/50 p-1.5 rounded-xl border border-stone-100">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
-                const num = k === "back" || k === "C" ? null : Number(k);
-                const isOccupied = num !== null && occupiedTables.includes(num);
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => handleDialpadPress(k)}
-                    className={cn(
-                      "flex h-8 items-center justify-center rounded-lg text-xs font-black shadow-xs active:scale-95 border",
-                      isOccupied
-                        ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
-                        : "bg-white text-stone-800 border-stone-100/50 hover:bg-stone-50"
-                    )}
-                  >
-                    {k === "back" ? "⌫" : k}
-                  </button>
-                );
-              })}
-            </div>
+            {showDialpad && (
+              <div className="grid grid-cols-3 gap-1 bg-stone-50/50 p-1.5 rounded-xl border border-stone-100 animate-in fade-in slide-in-from-top-1 duration-200">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "back"].map((k) => {
+                  const num = k === "back" || k === "C" ? null : Number(k);
+                  const isOccupied = num !== null && occupiedTables.includes(num);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => handleDialpadPress(k)}
+                      className={cn(
+                        "flex h-8 items-center justify-center rounded-lg text-xs font-black shadow-xs active:scale-95 border",
+                        isOccupied
+                          ? "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
+                          : "bg-white text-stone-800 border-stone-100/50 hover:bg-stone-50"
+                      )}
+                    >
+                      {k === "back" ? "⌫" : k}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {occupiedTables.length > 0 && (
               <div className="mt-2 text-[10px] font-bold text-red-600 bg-red-50/60 p-2 rounded-xl border border-red-100/40">
                 ⚠️ Occupied Tables: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
