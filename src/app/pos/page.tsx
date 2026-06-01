@@ -61,7 +61,7 @@ export default function POSPage() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [paying, setPaying] = useState(false);
   const [menuLoading, setMenuLoading] = useState(true);
-  const [showCartBottom, setShowCartBottom] = useState(false);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showDialpad, setShowDialpad] = useState(false);
 
   // Delivery Address State
@@ -315,7 +315,7 @@ export default function POSPage() {
       setCity("Sheikhupura");
       setDeliveryCharges(150);
       setPaying(false);
-      setShowCartBottom(false);
+      setShowDeliveryModal(false);
       toast.success(`Order #${num} sent to Kitchen successfully!`);
     } catch (err: any) {
       toast.error(err?.message || "Failed to submit order");
@@ -352,7 +352,8 @@ export default function POSPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [placeOrder]);
 
-  const cartPanel = (
+  // cartPanel removed — replaced by inline bottom bar
+  const _unused = (
     <div className="flex h-full flex-col bg-white relative">
 
       {/* ── 1. Cart Header ── */}
@@ -701,10 +702,8 @@ export default function POSPage() {
               <Sparkles className="h-3 w-3 text-primary" /> Point of Sale
             </p>
           </div>
-          <button
-            type="button"
+          <div
             className="relative flex h-12 items-center gap-2 rounded-2xl bg-primary px-4 font-bold text-white shadow-md"
-            onClick={() => setShowCartBottom(true)}
           >
             <ShoppingBag className="h-5 w-5" />
             {cartCount > 0 && (
@@ -712,7 +711,7 @@ export default function POSPage() {
                 {cartCount}
               </span>
             )}
-          </button>
+          </div>
         </div>
 
         {/* Order type */}
@@ -763,7 +762,7 @@ export default function POSPage() {
               className={cn(
                 "shrink-0 rounded-full px-4 py-2 text-sm font-bold transition",
                 activeCategory === cat.id
-                  ? "bg-primary text-white shadow-md"
+                  ? "bg-stone-900 text-white"
                   : "bg-white text-stone-600 ring-1 ring-stone-200"
               )}
             >
@@ -773,7 +772,7 @@ export default function POSPage() {
         </div>
       </header>
 
-      {/* Menu — full width, padded bottom for cart bar */}
+      {/* ── Menu Grid (full width) ── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="p-3 sm:p-4">
           <div className="relative">
@@ -787,42 +786,39 @@ export default function POSPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto px-3 pb-[88px] sm:grid-cols-3 sm:px-4 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto px-3 pb-[148px] sm:grid-cols-3 sm:px-4 lg:grid-cols-4 xl:grid-cols-5">
           {menuLoading ? (
-            <div className="col-span-full p-2">
-              <FoodGridSkeleton count={8} />
-            </div>
+            <div className="col-span-full p-2"><FoodGridSkeleton count={8} /></div>
           ) : filtered.map((item) => (
             <div
               key={item.id}
-              className="group flex flex-col h-56 overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40"
+              className="group flex flex-col h-52 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/40"
             >
               <button
                 type="button"
-                className="relative flex-1 w-full overflow-hidden bg-stone-100 active:scale-[0.98]"
+                className="relative flex-1 w-full overflow-hidden bg-stone-100 active:scale-[0.98] transition"
                 onClick={() => {
                   const custom = item.variants?.length ? { variantId: item.variants[0].id, variantName: item.variants[0].name } : {};
                   addItem(item, 1, custom);
                 }}
               >
                 <MenuItemImage src={item.imageUrl} alt={item.name} fill />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent opacity-80" />
-                <span className="absolute bottom-3 left-3 right-3 truncate text-sm font-black text-white drop-shadow-sm">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                <span className="absolute bottom-2 left-2 right-2 truncate text-sm font-black text-white drop-shadow">
                   {item.name}
                 </span>
-                <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-lg opacity-0 transition group-hover:opacity-100">
-                  <Plus className="h-4 w-4" />
+                <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow opacity-0 transition group-hover:opacity-100 active:scale-90">
+                  <Plus className="h-3.5 w-3.5" />
                 </span>
               </button>
-
               {item.variants && item.variants.length > 0 ? (
-                <div className="flex shrink-0 items-center gap-1 bg-stone-50 p-1.5 h-[52px]">
+                <div className="flex shrink-0 items-center gap-1 bg-stone-50 p-1.5 h-[50px]">
                   {item.variants.map((v) => (
                     <button
                       key={v.id}
                       type="button"
                       onClick={() => addItem(item, 1, { variantId: v.id, variantName: v.name })}
-                      className="flex-1 rounded-lg bg-white py-1.5 text-xs font-black text-stone-700 shadow-sm ring-1 ring-stone-200 hover:bg-stone-100 active:scale-95"
+                      className="flex-1 rounded-lg bg-white py-1.5 text-xs font-black text-stone-700 ring-1 ring-stone-200 hover:bg-primary hover:text-white hover:ring-primary active:scale-95 transition"
                     >
                       {v.name}
                     </button>
@@ -831,15 +827,11 @@ export default function POSPage() {
               ) : (
                 <button
                   type="button"
-                  className="flex shrink-0 items-center justify-between bg-white px-3 py-2.5 h-[52px] active:bg-stone-50"
+                  className="flex shrink-0 items-center justify-between bg-white px-3 py-2 h-[50px] hover:bg-orange-50 active:bg-stone-50 transition"
                   onClick={() => addItem(item)}
                 >
-                  <span className="text-base font-black text-primary">
-                    {formatCurrency(item.price)}
-                  </span>
-                  <span className="rounded-xl bg-orange-50 px-2.5 py-1 text-xs font-black text-orange-700">
-                    + Add
-                  </span>
+                  <span className="text-sm font-black text-primary">{formatCurrency(item.price)}</span>
+                  <span className="rounded-lg bg-orange-50 border border-orange-100 px-2 py-0.5 text-xs font-black text-orange-700">+ Add</span>
                 </button>
               )}
             </div>
@@ -850,61 +842,232 @@ export default function POSPage() {
         </div>
       </main>
 
-      {/* ── Fixed Bottom Cart Drawer ── */}
-      <div className={cn(
-        "fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-white shadow-[0_-8px_40px_rgba(0,0,0,0.18)] transition-all duration-300 ease-in-out",
-        showCartBottom ? "h-[80vh] rounded-t-3xl" : "h-[72px]"
-      )}>
-        {/* Drag handle / collapsed summary bar */}
-        <button
-          type="button"
-          className="flex w-full shrink-0 items-center gap-4 px-5 py-3 active:bg-stone-50 transition"
-          onClick={() => setShowCartBottom(!showCartBottom)}
-        >
-          {/* Handle pill */}
-          <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-stone-300 absolute top-2 left-1/2 -translate-x-1/2" />
+      {/* ════════════════════════════════════════
+           FIXED BOTTOM POS BAR — always visible
+          ════════════════════════════════════════ */}
+      <div className="fixed bottom-0 left-0 right-0 z-[60] bg-white border-t-2 border-stone-200 shadow-[0_-6px_30px_rgba(0,0,0,0.14)]">
 
-          <div className="flex flex-1 items-center gap-3 mt-3">
-            <div className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-md transition",
-              cartCount > 0 ? "bg-primary" : "bg-stone-300"
-            )}>
-              <ShoppingBag className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1 text-left">
-              <p className="text-xs font-black uppercase tracking-wider text-stone-500">
-                {cartCount > 0 ? `${cartCount} item${cartCount > 1 ? "s" : ""} in cart` : "Cart is empty"}
-              </p>
-              {cartCount > 0 && (
-                <p className="text-xs text-stone-400 truncate">
-                  {items.map(i => i.menuItem.name).join(", ")}
-                </p>
-              )}
-            </div>
+        {/* ── Row 1: Controls ── */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-stone-100">
+
+          {/* Customer Name */}
+          <div className="relative shrink-0 w-36">
+            <User className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+            <Input
+              className="h-10 rounded-xl border-stone-200 bg-stone-50 pl-8 text-sm font-semibold"
+              placeholder={orderType === "delivery" ? "Name *" : "Name"}
+              value={customerName}
+              onChange={(e) => setCustomer(e.target.value, customerPhone)}
+            />
           </div>
 
-          <div className="flex items-center gap-3 mt-3 shrink-0">
-            {cartCount > 0 && (
-              <span className="text-lg font-black text-primary">
-                {formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}
-              </span>
+          {/* Phone */}
+          <div className="relative shrink-0 w-36">
+            <Phone className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+            <Input
+              className="h-10 rounded-xl border-stone-200 bg-stone-50 pl-8 text-sm font-semibold"
+              placeholder={orderType === "delivery" ? "Phone *" : "Phone"}
+              value={customerPhone}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCustomer(customerName, val);
+                if (val.length >= 2) {
+                  const matches = savedCustomers.filter((c) => c.phone.toLowerCase().includes(val.toLowerCase()));
+                  setPhoneSuggestions(matches);
+                } else {
+                  setPhoneSuggestions([]);
+                }
+              }}
+            />
+            {phoneSuggestions.length > 0 && (
+              <ul className="absolute left-0 right-0 bottom-11 z-50 max-h-40 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
+                {phoneSuggestions.map((s, idx) => (
+                  <li key={idx}>
+                    <button type="button" onClick={() => { setCustomer(s.name, s.phone); setStreet(s.street || ""); setCity(s.city || "Sheikhupura"); setDeliveryCharges(s.deliveryCharges || 150); setPhoneSuggestions([]); }}
+                      className="w-full px-3 py-2 text-left text-xs text-stone-800 hover:bg-orange-50 border-b border-stone-50 font-bold">
+                      📞 {s.phone} <span className="text-stone-400 font-normal">({s.name})</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-            <span className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-xl text-stone-500 bg-stone-100 transition-transform duration-300",
-              showCartBottom && "rotate-180"
-            )}>
-              ▲
-            </span>
           </div>
-        </button>
 
-        {/* Expanded cart content */}
-        {showCartBottom && (
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {cartPanel}
-          </div>
-        )}
+          {/* Table # (dine-in) */}
+          {orderType === "dine_in" && (
+            <div className="relative shrink-0 w-28">
+              <Utensils className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+              <Input
+                type="number"
+                min="1"
+                className={cn(
+                  "h-10 rounded-xl border-stone-200 bg-stone-50 pl-8 text-sm font-black",
+                  tableNumber != null && occupiedTables.includes(tableNumber) && "border-red-400 bg-red-50"
+                )}
+                placeholder="Table # *"
+                value={tableNumber ?? ""}
+                onChange={(e) => setTableNumber(e.target.value ? Number(e.target.value) : undefined)}
+              />
+            </div>
+          )}
+
+          {/* Delivery Address btn */}
+          {orderType === "delivery" && (
+            <button
+              type="button"
+              onClick={() => setShowDeliveryModal(true)}
+              className={cn(
+                "flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition",
+                street ? "border-green-300 bg-green-50 text-green-700" : "border-orange-200 bg-orange-50 text-orange-700"
+              )}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              {street ? street.slice(0, 18) + (street.length > 18 ? "…" : "") : "Set Address *"}
+            </button>
+          )}
+
+          {/* Occupied table warning */}
+          {orderType === "dine_in" && tableNumber != null && occupiedTables.includes(tableNumber) && (
+            <span className="shrink-0 text-[10px] font-black text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1">⚠️ Occupied</span>
+          )}
+
+          <div className="flex-1" />
+
+          {/* Summary */}
+          {items.length > 0 && (
+            <div className="shrink-0 text-right mr-1">
+              {totalItemDiscounts > 0 && (
+                <p className="text-[10px] text-green-600 font-bold">-{formatCurrency(totalItemDiscounts)} off</p>
+              )}
+              <p className="text-xl font-black text-primary leading-none">
+                {formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}
+              </p>
+            </div>
+          )}
+
+          {/* Send to Kitchen */}
+          <Button
+            size="lg"
+            disabled={paying || !items.length}
+            className="h-12 shrink-0 rounded-xl px-5 text-sm font-black shadow-md shadow-primary/25"
+            onClick={placeOrder}
+          >
+            {paying ? "Sending…" : "Send to Kitchen · F2"}
+          </Button>
+
+          {/* Clear all */}
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => clearOrder()}
+              className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl text-stone-400 hover:bg-red-50 hover:text-red-500 transition"
+              title="Clear cart"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* ── Row 2: Horizontal scrollable item chips ── */}
+        <div className="flex items-center gap-2 overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {items.length === 0 ? (
+            <div className="flex items-center gap-2 text-stone-400 py-1">
+              <ShoppingBag className="h-4 w-4 shrink-0" />
+              <span className="text-xs font-semibold whitespace-nowrap">Tap items above to add to order</span>
+            </div>
+          ) : (
+            items.map((line) => (
+              <div
+                key={line.id}
+                className="flex shrink-0 items-center gap-2 rounded-xl bg-stone-50 border border-stone-200 px-2.5 py-1.5 hover:border-primary/40 transition"
+              >
+                {/* Thumbnail */}
+                <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-stone-100">
+                  <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                </div>
+                {/* Name + price */}
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-stone-900 max-w-[90px] truncate">
+                    {line.menuItem.name}
+                    {line.customization?.variantName && (
+                      <span className="ml-1 text-[9px] text-stone-400">({line.customization.variantName})</span>
+                    )}
+                  </p>
+                  <p className="text-xs font-black text-primary">{formatCurrency(line.subtotal)}</p>
+                </div>
+                {/* Qty controls */}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-stone-200 hover:bg-stone-300 active:scale-90 transition"
+                    onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="w-5 text-center text-sm font-black text-stone-900">{line.quantity}</span>
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary/90 active:scale-90 transition"
+                    onClick={() => updateQty(line.id, line.quantity + 1)}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </div>
+                {/* Remove */}
+                <button
+                  type="button"
+                  className="flex h-6 w-6 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition"
+                  onClick={() => removeItem(line.id)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
+
+      {/* ── Delivery Address Modal ── */}
+      {showDeliveryModal && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-stone-900 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" /> Delivery Address
+              </h3>
+              <button type="button" onClick={() => setShowDeliveryModal(false)} className="text-xs font-bold text-stone-400 hover:text-stone-700">✕ Close</button>
+            </div>
+            <Input
+              className="h-11 rounded-xl border-stone-200 text-sm"
+              placeholder="Street / House No. / Area *"
+              value={street}
+              onChange={(e) => setStreet(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                className="h-11 rounded-xl border-stone-200 text-sm"
+                placeholder="City *"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">Rs.</span>
+                <Input
+                  type="number"
+                  min="0"
+                  className="h-11 rounded-xl border-stone-200 pl-9 text-sm font-black text-primary"
+                  placeholder="Delivery Charges"
+                  value={deliveryCharges || ""}
+                  onChange={(e) => setDeliveryCharges(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+              </div>
+            </div>
+            <Button className="w-full h-12 rounded-xl font-bold" onClick={() => setShowDeliveryModal(false)}>
+              ✓ Save Address
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
