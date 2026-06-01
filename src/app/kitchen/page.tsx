@@ -24,7 +24,7 @@ export default function KitchenPage() {
   const prevCount = useRef(0);
 
   // Tabs state
-  const [activeTab, setActiveTab] = useState<"cooking" | "payment_pending">("cooking");
+  const [activeTab, setActiveTab] = useState<"cooking" | "payment_pending" | "website_orders">("cooking");
 
   // Editing order modal state
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -390,11 +390,18 @@ export default function KitchenPage() {
   const filteredOrders = orders.filter((order) => {
     const kitchenStatus = order.kitchenStatus ?? "new";
     if (activeTab === "cooking") {
-      return kitchenStatus === "new" || kitchenStatus === "preparing";
+      return (kitchenStatus === "new" || kitchenStatus === "preparing") && order.source !== "website";
+    } else if (activeTab === "payment_pending") {
+      return kitchenStatus === "ready" && order.source !== "website";
     } else {
-      return kitchenStatus === "ready";
+      return false; // website_orders tab has its own query below
     }
   });
+
+  // Website orders — all active website orders regardless of kitchen status
+  const websiteOrders = orders.filter(
+    (o) => o.source === "website" && o.status !== "cancelled" && o.status !== "served" && o.status !== "delivered"
+  );
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 overflow-hidden">
@@ -418,7 +425,7 @@ export default function KitchenPage() {
                   : "text-slate-500 hover:text-slate-900"
               )}
             >
-              🍳 Cooking ({(orders.filter(o => (o.kitchenStatus ?? "new") === "new" || o.kitchenStatus === "preparing")).length})
+              🍳 Cooking ({orders.filter(o => (o.kitchenStatus === "new" || o.kitchenStatus === "preparing") && o.source !== "website").length})
             </button>
             <button
               onClick={() => setActiveTab("payment_pending")}
@@ -429,7 +436,23 @@ export default function KitchenPage() {
                   : "text-slate-500 hover:text-slate-900"
               )}
             >
-              ⏳ Payment Pending ({(orders.filter(o => o.kitchenStatus === "ready")).length})
+              ⏳ Payment Pending ({orders.filter(o => o.kitchenStatus === "ready" && o.source !== "website").length})
+            </button>
+            <button
+              onClick={() => setActiveTab("website_orders")}
+              className={cn(
+                "rounded-lg px-4 py-2 text-xs font-bold transition relative",
+                activeTab === "website_orders"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              🌐 Website Orders
+              {orders.filter(o => o.source === "website" && o.status !== "cancelled" && o.status !== "served" && o.status !== "delivered").length > 0 && (
+                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-black text-white px-1">
+                  {orders.filter(o => o.source === "website" && o.status !== "cancelled" && o.status !== "served" && o.status !== "delivered").length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -444,130 +467,295 @@ export default function KitchenPage() {
         <div className="p-6"><KitchenColumnsSkeleton /></div>
       ) : (
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredOrders.map((order) => {
-              const created = parseDate(order.createdAt)?.getTime() ?? Date.now();
-              const elapsed = Math.floor((Date.now() - created) / 60000);
+          {/* ── POS / Standard Order Cards ── */}
+          {activeTab !== "website_orders" && (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredOrders.map((order) => {
+                const created = parseDate(order.createdAt)?.getTime() ?? Date.now();
+                const elapsed = Math.floor((Date.now() - created) / 60000);
 
-              return (
-                <div
-                  key={order.id}
-                  className={cn(
-                    "flex flex-col rounded-2xl border-2 bg-white shadow-sm overflow-hidden hover:border-primary/50 transition duration-300",
-                    order.billPrinted ? "border-slate-300 opacity-90" : "border-orange-200"
-                  )}
-                >
-                  {/* Header */}
-                  <div className="px-4 py-3 flex items-center justify-between border-b bg-stone-900 text-white font-bold">
-                    <div>
-                      <span className="text-base font-black">ORDER #{order.dailyOrderNumber ?? order.orderNumber}</span>
+                return (
+                  <div
+                    key={order.id}
+                    className={cn(
+                      "flex flex-col rounded-2xl border-2 bg-white shadow-sm overflow-hidden hover:border-primary/50 transition duration-300",
+                      order.billPrinted ? "border-slate-300 opacity-90" : "border-orange-200"
+                    )}
+                  >
+                    {/* Header */}
+                    <div className="px-4 py-3 flex items-center justify-between border-b bg-stone-900 text-white font-bold">
+                      <div>
+                        <span className="text-base font-black">ORDER #{order.dailyOrderNumber ?? order.orderNumber}</span>
+                      </div>
+                      <span className="text-xs font-bold font-mono bg-primary/80 px-2 py-0.5 rounded">
+                        {elapsed}m ago
+                      </span>
                     </div>
-                    <span className="text-xs font-bold font-mono bg-primary/80 px-2 py-0.5 rounded">
-                      {elapsed}m ago
-                    </span>
-                  </div>
 
-                  {/* Body */}
-                  <div className="flex-1 p-4 space-y-3 min-h-[160px] flex flex-col justify-between">
-                    <div>
-                      <div className="flex flex-wrap gap-1.5 items-center justify-between text-xs text-slate-500 font-bold capitalize">
-                        <div className="flex gap-1.5 items-center flex-wrap">
-                          <span className="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-lg">
-                            {order.type.replace("_", " ")}
-                          </span>
-                          {order.paymentStatus === "pending" && (
-                            <span className="bg-red-50 text-red-600 px-2 py-0.5 text-[9px] font-black uppercase rounded-md border border-red-200">
-                              Unpaid
+                    {/* Body */}
+                    <div className="flex-1 p-4 space-y-3 min-h-[160px] flex flex-col justify-between">
+                      <div>
+                        <div className="flex flex-wrap gap-1.5 items-center justify-between text-xs text-slate-500 font-bold capitalize">
+                          <div className="flex gap-1.5 items-center flex-wrap">
+                            <span className="bg-orange-50 text-orange-700 px-2.5 py-1 rounded-lg">
+                              {order.type.replace("_", " ")}
                             </span>
+                            {order.paymentStatus === "pending" && (
+                              <span className="bg-red-50 text-red-600 px-2 py-0.5 text-[9px] font-black uppercase rounded-md border border-red-200">
+                                Unpaid
+                              </span>
+                            )}
+                          </div>
+                          {order.tableNumber != null && (
+                            <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">Table {order.tableNumber}</span>
                           )}
                         </div>
-                        {order.tableNumber != null && (
-                          <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">Table {order.tableNumber}</span>
-                        )}
+
+                        <ul className="space-y-2.5 border-t border-slate-100 pt-3">
+                          {order.items.map((item, i) => (
+                            <li key={i} className="text-sm font-bold text-slate-800 flex items-start justify-between">
+                              <span>
+                                <span className="text-primary font-black text-base mr-1.5">{item.quantity}×</span>
+                                {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
+                                {item.customization?.notes && (
+                                  <span className="mt-0.5 block text-xs font-medium text-amber-700">
+                                    ↳ {item.customization.notes}
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
-                      <ul className="space-y-2.5 border-t border-slate-100 pt-3">
-                        {order.items.map((item, i) => (
-                          <li key={i} className="text-sm font-bold text-slate-800 flex items-start justify-between">
-                            <span>
-                              <span className="text-primary font-black text-base mr-1.5">{item.quantity}×</span>
-                              {item.name} {item.customization?.variantName ? `(${item.customization.variantName})` : ""}
-                              {item.customization?.notes && (
-                                <span className="mt-0.5 block text-xs font-medium text-amber-700">
-                                  ↳ {item.customization.notes}
-                                </span>
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-xs font-bold text-slate-500">
-                      <span>Order Value:</span>
-                      <span className="text-sm font-black text-slate-800">{formatCurrency(order.total)}</span>
-                    </div>
-                  </div>
-
-                  {/* Footer Action: Single Action Button */}
-                  <div className="p-3 border-t border-slate-100 bg-slate-50 flex gap-2">
-                    {/* Hide edit button if bill is printed */}
-                    {!order.billPrinted && (
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(order)}
-                        className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition active:scale-95 flex items-center justify-center shrink-0"
-                        title="Edit Items"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                    )}
-
-                    {activeTab === "cooking" ? (
-                      <button
-                        type="button"
-                        className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-primary/95 active:scale-95 transition flex items-center justify-center gap-1.5 shadow shadow-primary/20"
-                        onClick={() => markPrepared(order)}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        Prepared
-                      </button>
-                    ) : (
-                      <div className="flex flex-1 gap-2">
-                        <button
-                          type="button"
-                          className={cn(
-                            "flex-1 rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:scale-95"
-                          )}
-                          onClick={() => handlePrintBill(order)}
-                        >
-                          🖨️ {order.billPrinted ? "Re-Print Bill" : "Print Bill"}
-                        </button>
-                        <button
-                          type="button"
-                          className="flex-1 rounded-xl bg-green-600 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-green-700 active:scale-95 transition flex items-center justify-center gap-1.5 shadow shadow-green-600/20"
-                          onClick={() => {
-                            setSettlingOrder(order);
-                            setPaymentMethod("cash");
-                            setCreditName(order.customerName || "");
-                          }}
-                        >
-                          💵 Pay & Serve
-                        </button>
+                      <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-xs font-bold text-slate-500">
+                        <span>Order Value:</span>
+                        <span className="text-sm font-black text-slate-800">{formatCurrency(order.total)}</span>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="p-3 border-t border-slate-100 bg-slate-50 flex gap-2">
+                      {!order.billPrinted && (
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(order)}
+                          className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition active:scale-95 flex items-center justify-center shrink-0"
+                          title="Edit Items"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                      )}
+                      {activeTab === "cooking" ? (
+                        <button
+                          type="button"
+                          className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-primary/95 active:scale-95 transition flex items-center justify-center gap-1.5 shadow shadow-primary/20"
+                          onClick={() => markPrepared(order)}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Prepared
+                        </button>
+                      ) : (
+                        <div className="flex flex-1 gap-2">
+                          <button
+                            type="button"
+                            className="flex-1 rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:scale-95"
+                            onClick={() => handlePrintBill(order)}
+                          >
+                            🖨️ {order.billPrinted ? "Re-Print Bill" : "Print Bill"}
+                          </button>
+                          <button
+                            type="button"
+                            className="flex-1 rounded-xl bg-green-600 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-green-700 active:scale-95 transition flex items-center justify-center gap-1.5 shadow shadow-green-600/20"
+                            onClick={() => {
+                              setSettlingOrder(order);
+                              setPaymentMethod("cash");
+                              setCreditName(order.customerName || "");
+                            }}
+                          >
+                            💵 Pay & Serve
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+              {filteredOrders.length === 0 && (
+                <div className="col-span-full py-24 text-center">
+                  <p className="text-lg font-black text-slate-400">
+                    {activeTab === "cooking" ? "All clear! No pending kitchen tickets." : "No orders waiting for payment."}
+                  </p>
                 </div>
-              );
-            })}
-            {filteredOrders.length === 0 && (
-              <div className="col-span-full py-24 text-center">
-                <p className="text-lg font-black text-slate-400">
-                  {activeTab === "cooking" ? "All clear! No pending kitchen tickets." : "No orders waiting for payment."}
-                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Website Orders Tab ── */}
+          {activeTab === "website_orders" && (
+            <div>
+              <div className="mb-5 flex items-center gap-3">
+                <div className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+                <h2 className="text-sm font-black uppercase tracking-wider text-slate-600">Live Website Orders</h2>
+                <span className="rounded-full bg-blue-100 px-3 py-0.5 text-xs font-black text-blue-700">
+                  {websiteOrders.length} active
+                </span>
               </div>
-            )}
-          </div>
+
+              {websiteOrders.length === 0 ? (
+                <div className="py-24 text-center">
+                  <p className="text-4xl mb-4">🌐</p>
+                  <p className="text-lg font-black text-slate-400">No active website orders right now.</p>
+                  <p className="text-sm text-slate-300 mt-1">New online orders from the website will appear here.</p>
+                </div>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {websiteOrders.map((order) => {
+                    const created = parseDate(order.createdAt)?.getTime() ?? Date.now();
+                    const elapsed = Math.floor((Date.now() - created) / 60000);
+                    const addr = order.deliveryAddress
+                      ? [
+                          order.deliveryAddress.street,
+                          order.deliveryAddress.area,
+                          order.deliveryAddress.city,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")
+                      : "—";
+
+                    const statusColor =
+                      order.status === "received" || order.status === "pending"
+                        ? "bg-amber-500"
+                        : order.status === "preparing" || order.status === "in_kitchen"
+                        ? "bg-blue-500"
+                        : order.status === "ready"
+                        ? "bg-green-500"
+                        : order.status === "out_for_delivery"
+                        ? "bg-purple-500"
+                        : "bg-slate-400";
+
+                    return (
+                      <div
+                        key={order.id}
+                        className="flex flex-col rounded-2xl border-2 border-blue-200 bg-white shadow-sm overflow-hidden hover:border-blue-400 hover:shadow-md transition duration-300"
+                      >
+                        {/* Card Header */}
+                        <div className="px-4 py-3 flex items-center justify-between border-b bg-gradient-to-r from-blue-900 to-blue-700 text-white">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Website Order</span>
+                            <p className="text-base font-black">ORDER #{order.dailyOrderNumber ?? order.orderNumber}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-black uppercase text-white mb-1", statusColor)}>
+                              {order.status.replace("_", " ")}
+                            </span>
+                            <p className="text-[10px] text-blue-200 font-bold">{elapsed}m ago</p>
+                          </div>
+                        </div>
+
+                        {/* Customer Info */}
+                        <div className="px-4 pt-3 pb-2 bg-blue-50/40 border-b border-blue-100 space-y-1.5">
+                          <div className="flex items-center gap-2 text-sm font-black text-slate-800">
+                            <span className="text-base">👤</span>
+                            <span>{order.customerName || "—"}</span>
+                          </div>
+                          {order.customerPhone && (
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                              <span className="text-base">📞</span>
+                              <a href={`tel:${order.customerPhone}`} className="hover:text-blue-600 transition">
+                                {order.customerPhone}
+                              </a>
+                            </div>
+                          )}
+                          {addr !== "—" && (
+                            <div className="flex items-start gap-2 text-xs font-semibold text-slate-500">
+                              <span className="text-base shrink-0 mt-0.5">📍</span>
+                              <span className="leading-snug">{addr}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Items */}
+                        <div className="flex-1 px-4 py-3 space-y-1.5">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">Items Ordered</p>
+                          <ul className="space-y-1.5">
+                            {order.items.map((item, i) => (
+                              <li key={i} className="flex items-start justify-between text-sm font-bold text-slate-800">
+                                <span>
+                                  <span className="text-blue-600 font-black mr-1">{item.quantity}×</span>
+                                  {item.name}
+                                  {item.customization?.variantName && (
+                                    <span className="text-xs text-slate-400 ml-1">({item.customization.variantName})</span>
+                                  )}
+                                  {item.customization?.notes && (
+                                    <span className="block text-xs font-medium text-amber-600 mt-0.5">↳ {item.customization.notes}</span>
+                                  )}
+                                </span>
+                                <span className="text-xs font-black text-slate-600 shrink-0 ml-2">{formatCurrency(item.subtotal)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Totals */}
+                        <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 space-y-1">
+                          {order.deliveryCharge > 0 && (
+                            <div className="flex justify-between text-xs text-slate-500 font-semibold">
+                              <span>Delivery Charge</span>
+                              <span>{formatCurrency(order.deliveryCharge)}</span>
+                            </div>
+                          )}
+                          {order.discount > 0 && (
+                            <div className="flex justify-between text-xs text-green-600 font-bold">
+                              <span>Discount</span>
+                              <span>-{formatCurrency(order.discount)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between font-black text-sm text-slate-900 pt-1 border-t border-slate-200">
+                            <span>Total</span>
+                            <span className="text-blue-700">{formatCurrency(order.total)}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            <span>Payment</span>
+                            <span className={cn(
+                              "font-black",
+                              order.paymentStatus === "paid" ? "text-green-600" :
+                              order.paymentStatus === "pending" ? "text-red-500" : "text-slate-600"
+                            )}>
+                              {order.paymentMethod} / {order.paymentStatus}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="p-3 border-t border-slate-100 flex gap-2">
+                          <button
+                            type="button"
+                            className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-blue-700 active:scale-95 transition flex items-center justify-center gap-1.5"
+                            onClick={() => markPrepared(order)}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                            Mark Prepared
+                          </button>
+                          <button
+                            type="button"
+                            className="flex-1 rounded-xl bg-green-600 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-green-700 active:scale-95 transition flex items-center justify-center gap-1.5"
+                            onClick={() => {
+                              setSettlingOrder(order);
+                              setPaymentMethod("cash");
+                              setCreditName(order.customerName || "");
+                            }}
+                          >
+                            💵 Pay & Deliver
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       )}
 

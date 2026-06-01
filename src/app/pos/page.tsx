@@ -63,6 +63,7 @@ export default function POSPage() {
   const [paying, setPaying] = useState(false);
   const [menuLoading, setMenuLoading] = useState(true);
   const [showDialpad, setShowDialpad] = useState(false);
+  const [cartStep, setCartStep] = useState<"cart" | "details">("cart");
 
   // Delivery state
   const [street, setStreet] = useState("");
@@ -256,6 +257,7 @@ export default function POSPage() {
       setCity("Sheikhupura");
       setDeliveryCharges(150);
       setPaying(false);
+      setCartStep("cart");
       toast.success(`Order #${num} sent to Kitchen successfully!`);
     } catch (err: any) {
       toast.error(err?.message || "Failed to submit order");
@@ -268,11 +270,22 @@ export default function POSPage() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "F2") { e.preventDefault(); placeOrder(); }
+      if (e.key === "F2") {
+        e.preventDefault();
+        if (cartStep === "cart") {
+          if (items.length > 0) {
+            setCartStep("details");
+          } else {
+            toast.error("Tap items to add to cart");
+          }
+        } else {
+          placeOrder();
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [placeOrder]);
+  }, [placeOrder, cartStep, items.length]);
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f8f4ef]">
@@ -394,253 +407,297 @@ export default function POSPage() {
           className="flex flex-col bg-white border-l-2 border-stone-200 shadow-[-4px_0_20px_rgba(0,0,0,0.06)]"
           style={{ width: "40%", minWidth: "360px" }}
         >
-          {/* Cart Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 bg-stone-50/60 shrink-0">
-            <span className="text-sm font-black uppercase tracking-wider text-stone-600 flex items-center gap-2">
-              <ShoppingBag className="h-4 w-4 text-primary" /> Order
-              {items.length > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white px-1.5">
-                  {items.length}
+          {cartStep === "cart" ? (
+            <>
+              {/* Cart Header */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 bg-stone-50/60 shrink-0">
+                <span className="text-sm font-black uppercase tracking-wider text-stone-600 flex items-center gap-2">
+                  <ShoppingBag className="h-4 w-4 text-primary" /> Order Cart
+                  {items.length > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white px-1.5">
+                      {items.length}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-            {items.length > 0 && (
-              <button type="button" onClick={() => clearOrder()}
-                className="text-xs font-bold text-red-400 hover:text-red-600 transition flex items-center gap-1">
-                <Trash2 className="h-3.5 w-3.5" /> Clear all
-              </button>
-            )}
-          </div>
-
-          {/* Cart Items (scrollable) */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {items.length === 0 ? (
-              <div className="flex h-full min-h-[200px] flex-col items-center justify-center p-8 text-center">
-                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-stone-100">
-                  <ShoppingBag className="h-9 w-9 text-stone-300" />
-                </div>
-                <p className="font-black text-stone-400 text-base">Cart is empty</p>
-                <p className="mt-1 text-sm text-stone-300">Tap a product to add it</p>
+                {items.length > 0 && (
+                  <button type="button" onClick={() => clearOrder()}
+                    className="text-xs font-bold text-red-400 hover:text-red-600 transition flex items-center gap-1">
+                    <Trash2 className="h-3.5 w-3.5" /> Clear all
+                  </button>
+                )}
               </div>
-            ) : (
-              <ul className="divide-y divide-stone-100">
-                {items.map((line) => (
-                  <li key={line.id} className="px-4 py-3.5 hover:bg-stone-50/80 transition-colors">
-                    {/* Item row */}
-                    <div className="flex items-center gap-3">
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
-                        <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-black text-stone-900 leading-tight">
-                          {line.menuItem.name}
-                          {line.customization?.variantName && (
-                            <span className="ml-1 text-[10px] font-semibold text-stone-400 bg-stone-100 rounded px-1">
-                              {line.customization.variantName}
-                            </span>
-                          )}
-                        </p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-base font-black text-primary">{formatCurrency(line.subtotal)}</span>
-                          {line.discountAmount ? (
-                            <span className="text-xs font-bold text-stone-400 line-through">{formatCurrency(line.unitPrice * line.quantity)}</span>
-                          ) : (
-                            <span className="text-xs text-stone-400">{formatCurrency(line.unitPrice)} ea</span>
-                          )}
-                        </div>
-                      </div>
-                      {/* Qty */}
-                      <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-0.5">
-                        <button type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-stone-700 shadow-sm active:scale-90 transition hover:bg-stone-50"
-                          onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}>
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="w-7 text-center text-sm font-black text-stone-900">{line.quantity}</span>
-                        <button type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-sm active:scale-90 transition"
-                          onClick={() => updateQty(line.id, line.quantity + 1)}>
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-                      {/* Remove */}
-                      <button type="button"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition"
-                        onClick={() => removeItem(line.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+
+              {/* Cart Items (scrollable) */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {items.length === 0 ? (
+                  <div className="flex h-full min-h-[200px] flex-col items-center justify-center p-8 text-center">
+                    <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-stone-100">
+                      <ShoppingBag className="h-9 w-9 text-stone-300" />
                     </div>
-
-                    {/* Per-item Discount */}
-                    <div className="mt-2.5 flex items-center justify-between gap-2 pl-[76px]">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Discount</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex rounded-md bg-stone-100 p-0.5">
+                    <p className="font-black text-stone-400 text-base">Cart is empty</p>
+                    <p className="mt-1 text-sm text-stone-300">Tap a product to add it</p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-stone-100">
+                    {items.map((line) => (
+                      <li key={line.id} className="px-4 py-3.5 hover:bg-stone-50/80 transition-colors">
+                        {/* Item row */}
+                        <div className="flex items-center gap-3">
+                          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
+                            <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-black text-stone-900 leading-tight">
+                              {line.menuItem.name}
+                              {line.customization?.variantName && (
+                                <span className="ml-1 text-[10px] font-semibold text-stone-400 bg-stone-100 rounded px-1">
+                                  {line.customization.variantName}
+                                </span>
+                              )}
+                            </p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-base font-black text-primary">{formatCurrency(line.subtotal)}</span>
+                              {line.discountAmount ? (
+                                <span className="text-xs font-bold text-stone-400 line-through">{formatCurrency(line.unitPrice * line.quantity)}</span>
+                              ) : (
+                                <span className="text-xs text-stone-400">{formatCurrency(line.unitPrice)} ea</span>
+                              )}
+                            </div>
+                          </div>
+                          {/* Qty */}
+                          <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-0.5">
+                            <button type="button"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-stone-700 shadow-sm active:scale-90 transition hover:bg-stone-50"
+                              onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}>
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <span className="w-7 text-center text-sm font-black text-stone-900">{line.quantity}</span>
+                            <button type="button"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-sm active:scale-90 transition"
+                              onClick={() => updateQty(line.id, line.quantity + 1)}>
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                          {/* Remove */}
                           <button type="button"
-                            onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "percent", line.discountValue ?? 0); }}
-                            className={cn("px-2 py-1 text-[10px] font-black rounded transition-all",
-                              line.discountType === "percent" ? "bg-white text-stone-900 shadow-xs" : "text-stone-400 hover:text-stone-600"
-                            )}>%</button>
-                          <button type="button"
-                            onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "cash", line.discountValue ?? 0); }}
-                            className={cn("px-2 py-1 text-[10px] font-black rounded transition-all",
-                              line.discountType === "cash" ? "bg-white text-stone-900 shadow-xs" : "text-stone-400 hover:text-stone-600"
-                            )}>Rs</button>
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition"
+                            onClick={() => removeItem(line.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
-                        <div className="relative w-20">
-                          <input
-                            type="number" min="0" value={line.discountValue || ""} placeholder="0"
-                            onChange={(e) => {
-                              const { updateLineDiscount } = usePOSStore.getState();
-                              let val = parseInt(e.target.value) || 0;
-                              if (line.discountType === "percent") val = Math.min(100, Math.max(0, val));
-                              else val = Math.min(line.unitPrice, Math.max(0, val));
-                              updateLineDiscount(line.id, line.discountType || "percent", val);
-                            }}
-                            className="w-full h-7 text-right pr-5 font-bold rounded-md border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                          />
-                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-stone-400">
-                            {line.discountType === "percent" ? "%" : "₨"}
-                          </span>
+
+                        {/* Per-item Discount */}
+                        <div className="mt-2.5 flex items-center justify-between gap-2 pl-[76px]">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Discount</span>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex rounded-md bg-stone-100 p-0.5">
+                              <button type="button"
+                                onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "percent", line.discountValue ?? 0); }}
+                                className={cn("px-2 py-1 text-[10px] font-black rounded transition-all",
+                                  line.discountType === "percent" ? "bg-white text-stone-900 shadow-xs" : "text-stone-400 hover:text-stone-600"
+                                )}>%</button>
+                              <button type="button"
+                                onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "cash", line.discountValue ?? 0); }}
+                                className={cn("px-2 py-1 text-[10px] font-black rounded transition-all",
+                                  line.discountType === "cash" ? "bg-white text-stone-900 shadow-xs" : "text-stone-400 hover:text-stone-600"
+                                )}>Rs</button>
+                            </div>
+                            <div className="relative w-20">
+                              <input
+                                type="number" min="0" value={line.discountValue || ""} placeholder="0"
+                                onChange={(e) => {
+                                  const { updateLineDiscount } = usePOSStore.getState();
+                                  let val = parseInt(e.target.value) || 0;
+                                  if (line.discountType === "percent") val = Math.min(100, Math.max(0, val));
+                                  else val = Math.min(line.unitPrice, Math.max(0, val));
+                                  updateLineDiscount(line.id, line.discountType || "percent", val);
+                                }}
+                                className="w-full h-7 text-right pr-5 font-bold rounded-md border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                              />
+                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-stone-400">
+                                {line.discountType === "percent" ? "%" : "₨"}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Order Details */}
-          <div className="shrink-0 border-t border-stone-100 bg-gradient-to-br from-orange-50/60 to-white px-5 py-4 space-y-3">
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-800/60">
-              <User className="h-3.5 w-3.5" /> Order Details
-              {orderType === "delivery" && <span className="text-red-500 font-black text-[10px]">* required</span>}
-            </p>
-
-            {/* Name + Phone */}
-            <div className="grid gap-2 grid-cols-2">
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                <Input className="h-11 rounded-xl border-stone-200 bg-white pl-9 text-sm"
-                  placeholder={orderType === "delivery" ? "Name *" : "Name (optional)"}
-                  value={customerName}
-                  onChange={(e) => setCustomer(e.target.value, customerPhone)}
-                />
-              </div>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                <Input className="h-11 rounded-xl border-stone-200 bg-white pl-9 text-sm"
-                  placeholder={orderType === "delivery" ? "Phone *" : "Phone (optional)"}
-                  value={customerPhone}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setCustomer(customerName, val);
-                    if (val.length >= 2) {
-                      setPhoneSuggestions(savedCustomers.filter((c) => c.phone.toLowerCase().includes(val.toLowerCase())));
-                    } else {
-                      setPhoneSuggestions([]);
-                    }
-                  }}
-                />
-                {phoneSuggestions.length > 0 && (
-                  <ul className="absolute left-0 right-0 bottom-12 z-50 max-h-40 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
-                    {phoneSuggestions.map((s, idx) => (
-                      <li key={idx}>
-                        <button type="button" onClick={() => selectSuggestion(s)}
-                          className="w-full px-3 py-2 text-left text-xs text-stone-800 hover:bg-stone-50 border-b border-stone-50 font-bold">
-                          📞 {s.phone} <span className="text-stone-400 font-normal">({s.name})</span>
-                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
-            </div>
 
-            {/* Delivery Address */}
-            {orderType === "delivery" && (
-              <div className="space-y-2 border-t pt-3 border-stone-100/80">
-                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-orange-800/60">
-                  <MapPin className="h-3 w-3" /> Delivery Address
-                </p>
-                <Input className="h-11 rounded-xl border-stone-200 bg-white text-sm" placeholder="Street / House No. / Address *"
-                  value={street} onChange={(e) => setStreet(e.target.value)} />
-                <div className="grid grid-cols-2 gap-2">
-                  <Input className="h-11 rounded-xl border-stone-200 bg-white text-sm" placeholder="City *"
-                    value={city} onChange={(e) => setCity(e.target.value)} />
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">Rs.</span>
-                    <Input type="number" min="0" className="h-11 rounded-xl border-stone-200 bg-white text-sm pl-9 font-black text-primary"
-                      placeholder="Charges" value={deliveryCharges || ""}
-                      onChange={(e) => setDeliveryCharges(Math.max(0, parseInt(e.target.value) || 0))} />
+              {/* Pay Bar - Step 1 */}
+              <div className="shrink-0 border-t bg-white px-5 py-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+                {items.length > 0 && (
+                  <div className="mb-3 space-y-1 rounded-xl bg-stone-50 px-4 py-3 border border-stone-100 text-sm">
+                    <div className="flex justify-between text-stone-500">
+                      <span>Subtotal</span>
+                      <span className="font-semibold">{formatCurrency(originalSubtotal)}</span>
+                    </div>
+                    {totalItemDiscounts > 0 && (
+                      <div className="flex justify-between font-bold text-green-600">
+                        <span>Discount</span>
+                        <span>-{formatCurrency(totalItemDiscounts)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-stone-200 pt-2 font-black text-stone-900 text-base">
+                      <span>Total</span>
+                      <span className="text-primary">{formatCurrency(total)}</span>
+                    </div>
                   </div>
-                </div>
+                )}
+                <Button size="lg" disabled={!items.length}
+                  className="h-14 w-full rounded-2xl text-base font-bold shadow-lg shadow-primary/25"
+                  onClick={() => setCartStep("details")}>
+                  Next (Add Details) →
+                </Button>
               </div>
-            )}
-
-            {/* Dine-in Table selector */}
-            {orderType === "dine_in" && (
-              <div className="border-t pt-3 border-stone-100/80 space-y-2">
-                <button type="button" onClick={() => setShowDialpad(true)}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-sm font-bold hover:opacity-90 transition",
-                    tableNumber != null && occupiedTables.includes(tableNumber)
-                      ? "bg-red-50 border-red-200 text-red-700"
-                      : "bg-orange-50/70 border-orange-100/70 text-orange-900/80"
-                  )}>
-                  <span className="flex items-center gap-2 uppercase tracking-wider">
-                    <Utensils className="h-4 w-4" />
-                    Table: {tableNumber != null ? `#${tableNumber}` : "Select Table *"}
-                  </span>
-                  <span className="text-xs font-black opacity-60">▼ Tap</span>
+            </>
+          ) : (
+            <>
+              {/* Back Header */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 bg-stone-50/60 shrink-0">
+                <button type="button" onClick={() => setCartStep("cart")}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-stone-600 shadow-sm border border-stone-200/80 hover:bg-stone-50 transition active:scale-95">
+                  <ArrowLeft className="h-4 w-4" />
                 </button>
-                {tableNumber != null && occupiedTables.includes(tableNumber) && (
-                  <div className="text-xs font-bold text-red-600 bg-red-50/60 p-2 rounded-xl border border-red-100/40">
-                    ⚠️ Table #{tableNumber} is already occupied!
-                  </div>
-                )}
-                {occupiedTables.length > 0 && (
-                  <div className="text-[10px] font-bold text-stone-400 bg-stone-50 p-2 rounded-xl border border-stone-100">
-                    Occupied: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
-                  </div>
-                )}
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-black text-stone-800">Order Details</span>
+                  <p className="text-[10px] text-stone-400 font-semibold">{items.length} items selected</p>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Pay Bar */}
-          <div className="shrink-0 border-t bg-white px-5 py-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
-            {items.length > 0 && (
-              <div className="mb-3 space-y-1 rounded-xl bg-stone-50 px-4 py-3 border border-stone-100 text-sm">
-                <div className="flex justify-between text-stone-500">
-                  <span>Subtotal</span>
-                  <span className="font-semibold">{formatCurrency(originalSubtotal)}</span>
-                </div>
-                {totalItemDiscounts > 0 && (
-                  <div className="flex justify-between font-bold text-green-600">
-                    <span>Discount</span>
-                    <span>-{formatCurrency(totalItemDiscounts)}</span>
+              {/* Order Details Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-850">
+                  <User className="h-3.5 w-3.5" /> Customer Info
+                  {orderType === "delivery" && <span className="text-red-500 font-black text-[10px]">* required</span>}
+                </p>
+
+                {/* Name + Phone */}
+                <div className="grid gap-3 grid-cols-1">
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <Input className="h-12 rounded-xl border-stone-200 bg-white pl-10 text-sm"
+                      placeholder={orderType === "delivery" ? "Name *" : "Name (optional)"}
+                      value={customerName}
+                      onChange={(e) => setCustomer(e.target.value, customerPhone)}
+                    />
                   </div>
-                )}
+                  <div className="relative">
+                    <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <Input className="h-12 rounded-xl border-stone-200 bg-white pl-10 text-sm"
+                      placeholder={orderType === "delivery" ? "Phone *" : "Phone (optional)"}
+                      value={customerPhone}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomer(customerName, val);
+                        if (val.length >= 2) {
+                          setPhoneSuggestions(savedCustomers.filter((c) => c.phone.toLowerCase().includes(val.toLowerCase())));
+                        } else {
+                          setPhoneSuggestions([]);
+                        }
+                      }}
+                    />
+                    {phoneSuggestions.length > 0 && (
+                      <ul className="absolute left-0 right-0 top-13 z-50 max-h-40 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
+                        {phoneSuggestions.map((s, idx) => (
+                          <li key={idx}>
+                            <button type="button" onClick={() => selectSuggestion(s)}
+                              className="w-full px-3 py-2.5 text-left text-xs text-stone-800 hover:bg-stone-50 border-b border-stone-50 font-bold flex flex-col">
+                              <span>📞 {s.phone}</span>
+                              <span className="text-stone-400 font-normal text-[10px]">{s.name} - {s.street}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery Address */}
                 {orderType === "delivery" && (
-                  <div className="flex justify-between text-stone-500">
-                    <span>Delivery</span>
-                    <span className="font-semibold">{formatCurrency(deliveryCharges)}</span>
+                  <div className="space-y-3 border-t pt-4 border-stone-100">
+                    <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-orange-850">
+                      <MapPin className="h-3 w-3" /> Delivery Address
+                    </p>
+                    <Input className="h-12 rounded-xl border-stone-200 bg-white text-sm" placeholder="Street / House No. / Address *"
+                      value={street} onChange={(e) => setStreet(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input className="h-12 rounded-xl border-stone-200 bg-white text-sm" placeholder="City *"
+                        value={city} onChange={(e) => setCity(e.target.value)} />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-stone-400">Rs.</span>
+                        <Input type="number" min="0" className="h-12 rounded-xl border-stone-200 bg-white text-sm pl-9 font-black text-primary"
+                          placeholder="Charges" value={deliveryCharges || ""}
+                          onChange={(e) => setDeliveryCharges(Math.max(0, parseInt(e.target.value) || 0))} />
+                      </div>
+                    </div>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-stone-200 pt-2 font-black text-stone-900 text-base">
-                  <span>Total</span>
-                  <span className="text-primary">{formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}</span>
-                </div>
+
+                {/* Dine-in Table selector */}
+                {orderType === "dine_in" && (
+                  <div className="border-t pt-4 border-stone-100 space-y-2.5">
+                    <button type="button" onClick={() => setShowDialpad(true)}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-sm font-bold hover:opacity-90 transition",
+                        tableNumber != null && occupiedTables.includes(tableNumber)
+                          ? "bg-red-50 border-red-200 text-red-700"
+                          : "bg-orange-50/70 border-orange-100/70 text-orange-900/80"
+                      )}>
+                      <span className="flex items-center gap-2 uppercase tracking-wider">
+                        <Utensils className="h-4 w-4" />
+                        Table: {tableNumber != null ? `#${tableNumber}` : "Select Table *"}
+                      </span>
+                      <span className="text-xs font-black opacity-60">▼ Tap</span>
+                    </button>
+                    {tableNumber != null && occupiedTables.includes(tableNumber) && (
+                      <div className="text-xs font-bold text-red-600 bg-red-50/60 p-2.5 rounded-xl border border-red-100/40">
+                        ⚠️ Table #{tableNumber} is already occupied!
+                      </div>
+                    )}
+                    {occupiedTables.length > 0 && (
+                      <div className="text-[10px] font-bold text-stone-400 bg-stone-50 p-2.5 rounded-xl border border-stone-100">
+                        Occupied: {occupiedTables.sort((a, b) => a - b).map((t) => `#${t}`).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-            <Button size="lg" disabled={paying || !items.length}
-              className="h-14 w-full rounded-2xl text-base font-bold shadow-lg shadow-primary/25"
-              onClick={placeOrder}>
-              {paying ? "Processing..." : `Send to Kitchen · F2`}
-            </Button>
-          </div>
+
+              {/* Pay Bar - Step 2 */}
+              <div className="shrink-0 border-t bg-white px-5 py-4 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+                <div className="mb-3 space-y-1 rounded-xl bg-stone-50 px-4 py-3 border border-stone-100 text-sm">
+                  <div className="flex justify-between text-stone-500">
+                    <span>Subtotal</span>
+                    <span className="font-semibold">{formatCurrency(originalSubtotal)}</span>
+                  </div>
+                  {totalItemDiscounts > 0 && (
+                    <div className="flex justify-between font-bold text-green-600">
+                      <span>Discount</span>
+                      <span>-{formatCurrency(totalItemDiscounts)}</span>
+                    </div>
+                  )}
+                  {orderType === "delivery" && (
+                    <div className="flex justify-between text-stone-500">
+                      <span>Delivery</span>
+                      <span className="font-semibold">{formatCurrency(deliveryCharges)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-stone-200 pt-2 font-black text-stone-900 text-base">
+                    <span>Total</span>
+                    <span className="text-primary">{formatCurrency(total + (orderType === "delivery" ? deliveryCharges : 0))}</span>
+                  </div>
+                </div>
+                <Button size="lg" disabled={paying || !items.length}
+                  className="h-14 w-full rounded-2xl text-base font-bold shadow-lg shadow-primary/25"
+                  onClick={placeOrder}>
+                  {paying ? "Processing..." : `Send to Kitchen · F2`}
+                </Button>
+              </div>
+            </>
+          )}
         </aside>
       </div>
 
