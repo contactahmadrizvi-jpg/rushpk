@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MenuItemImage } from "@/components/menu-item-image";
@@ -17,6 +17,8 @@ import {
   Plus,
   Sparkles,
   MapPin,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +57,19 @@ const ORDER_TYPES: { id: OrderType; label: string; icon: string }[] = [
 export default function POSPage() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  const scrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -280, behavior: "smooth" });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 280, behavior: "smooth" });
+    }
+  };
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [search, setSearch] = useState("");
@@ -964,119 +979,145 @@ export default function POSPage() {
         </div>
 
         {/* ── Row 2: Horizontal scrollable item cards with discount controls ── */}
-        <div className="flex items-center gap-3 overflow-x-auto px-3 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {items.length === 0 ? (
-            <div className="flex items-center gap-2 text-stone-400 py-1">
-              <ShoppingBag className="h-4 w-4 shrink-0" />
-              <span className="text-xs font-semibold whitespace-nowrap">Tap items above to add to order</span>
-            </div>
-          ) : (
-            items.map((line) => (
-              <div
-                key={line.id}
-                className="flex shrink-0 flex-col gap-2 rounded-xl bg-stone-50 border border-stone-200 p-2.5 hover:border-primary/40 transition w-64 shadow-xs"
+        <div className="relative group/scroll flex items-center w-full bg-stone-50/40">
+          {items.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={scrollLeft}
+                className="absolute left-2.5 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 border border-stone-200 text-stone-700 shadow-md hover:bg-stone-50 hover:text-stone-900 active:scale-90 transition opacity-0 group-hover/scroll:opacity-100 duration-150"
               >
-                {/* Top Row: Thumbnail, Name, Price, Remove */}
-                <div className="flex items-center gap-2">
-                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-stone-100 bg-white">
-                    <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-black text-stone-900 truncate leading-tight">
-                      {line.menuItem.name}
-                      {line.customization?.variantName && (
-                        <span className="ml-1 text-[9px] text-stone-400 font-bold">({line.customization.variantName})</span>
-                      )}
-                    </p>
-                    <p className="text-xs font-black text-primary mt-0.5">{formatCurrency(line.subtotal)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-55 active:scale-90 transition"
-                    onClick={() => removeItem(line.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {/* Bottom Row: Qty Controls + Discount Selector */}
-                <div className="flex items-center justify-between gap-1 border-t border-stone-150 pt-2">
-                  {/* Qty controls */}
-                  <div className="flex items-center gap-0.5 bg-stone-200/50 p-0.5 rounded-lg">
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-stone-700 shadow-xs hover:bg-stone-55 active:scale-90 transition"
-                      onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
-                    <span className="w-5 text-center text-xs font-black text-stone-900">{line.quantity}</span>
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white shadow-xs hover:bg-primary/95 active:scale-90 transition"
-                      onClick={() => updateQty(line.id, line.quantity + 1)}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </button>
-                  </div>
-
-                  {/* Discount controls */}
-                  <div className="flex items-center gap-1">
-                    <div className="flex rounded-md bg-stone-200/50 p-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const { updateLineDiscount } = usePOSStore.getState();
-                          updateLineDiscount(line.id, "percent", line.discountValue ?? 0);
-                        }}
-                        className={cn(
-                          "px-1 py-0.5 text-[9px] font-black rounded transition-all",
-                          line.discountType === "percent"
-                            ? "bg-white text-stone-900 shadow-xs"
-                            : "text-stone-500 hover:text-stone-750"
-                        )}
-                      >%</button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const { updateLineDiscount } = usePOSStore.getState();
-                          updateLineDiscount(line.id, "cash", line.discountValue ?? 0);
-                        }}
-                        className={cn(
-                          "px-1 py-0.5 text-[9px] font-black rounded transition-all",
-                          line.discountType === "cash"
-                            ? "bg-white text-stone-900 shadow-xs"
-                            : "text-stone-500 hover:text-stone-750"
-                        )}
-                      >Rs</button>
-                    </div>
-                    <div className="relative w-12">
-                      <input
-                        type="number"
-                        min="0"
-                        value={line.discountValue || ""}
-                        placeholder="0"
-                        onChange={(e) => {
-                          const { updateLineDiscount } = usePOSStore.getState();
-                          let val = parseInt(e.target.value) || 0;
-                          if (line.discountType === "percent") {
-                            val = Math.min(100, Math.max(0, val));
-                          } else {
-                            val = Math.min(line.unitPrice, Math.max(0, val));
-                          }
-                          updateLineDiscount(line.id, line.discountType || "percent", val);
-                        }}
-                        className="w-full h-6 text-right pr-3 font-bold rounded border border-stone-250 bg-white text-[10px] focus:ring-1 focus:ring-primary focus:outline-none"
-                      />
-                      <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] font-extrabold text-stone-400">
-                        {line.discountType === "percent" ? "%" : "₨"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={scrollRight}
+                className="absolute right-2.5 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 border border-stone-200 text-stone-700 shadow-md hover:bg-stone-50 hover:text-stone-900 active:scale-90 transition opacity-0 group-hover/scroll:opacity-100 duration-150"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
           )}
+
+          <div
+            ref={scrollContainerRef}
+            className="flex items-center gap-4 overflow-x-auto px-10 py-3.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-full scroll-smooth"
+          >
+            {items.length === 0 ? (
+              <div className="flex items-center gap-2 text-stone-400 py-2.5">
+                <ShoppingBag className="h-5 w-5 shrink-0" />
+                <span className="text-sm font-semibold whitespace-nowrap">Tap items above to add to order</span>
+              </div>
+            ) : (
+              items.map((line) => (
+                <div
+                  key={line.id}
+                  className="flex shrink-0 flex-col gap-3 rounded-2xl bg-white border border-stone-200/80 p-3.5 hover:border-primary/50 transition w-80 shadow-sm"
+                >
+                  {/* Top Row: Thumbnail, Name, Price, Remove */}
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-stone-150 bg-stone-50">
+                      <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-stone-900 truncate leading-tight">
+                        {line.menuItem.name}
+                        {line.customization?.variantName && (
+                          <span className="ml-1 text-[10px] text-stone-400 font-bold bg-stone-100 px-1 rounded">
+                            {line.customization.variantName}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-sm font-black text-primary mt-1">{formatCurrency(line.subtotal)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-stone-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition"
+                      onClick={() => removeItem(line.id)}
+                    >
+                      <Trash2 className="h-4.5 w-4.5" />
+                    </button>
+                  </div>
+
+                  {/* Bottom Row: Qty Controls + Discount Selector */}
+                  <div className="flex items-center justify-between gap-2 border-t border-stone-100 pt-3">
+                    {/* Qty controls */}
+                    <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl border border-stone-200/40">
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-stone-750 shadow-xs hover:bg-stone-50 active:scale-90 transition"
+                        onClick={() => updateQty(line.id, Math.max(1, line.quantity - 1))}
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-black text-stone-900">{line.quantity}</span>
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-xs hover:bg-primary/95 active:scale-90 transition"
+                        onClick={() => updateQty(line.id, line.quantity + 1)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Discount controls */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex rounded-lg bg-stone-100 p-0.5 border border-stone-200/45 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const { updateLineDiscount } = usePOSStore.getState();
+                            updateLineDiscount(line.id, "percent", line.discountValue ?? 0);
+                          }}
+                          className={cn(
+                            "px-1.5 py-1 text-[10px] font-black rounded-md transition-all",
+                            line.discountType === "percent"
+                              ? "bg-white text-stone-900 shadow-xs"
+                              : "text-stone-500 hover:text-stone-850"
+                          )}
+                        >%</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const { updateLineDiscount } = usePOSStore.getState();
+                            updateLineDiscount(line.id, "cash", line.discountValue ?? 0);
+                          }}
+                          className={cn(
+                            "px-1.5 py-1 text-[10px] font-black rounded-md transition-all",
+                            line.discountType === "cash"
+                              ? "bg-white text-stone-900 shadow-xs"
+                              : "text-stone-500 hover:text-stone-850"
+                          )}
+                        >Rs</button>
+                      </div>
+                      <div className="relative w-16">
+                        <input
+                          type="number"
+                          min="0"
+                          value={line.discountValue || ""}
+                          placeholder="0"
+                          onChange={(e) => {
+                            const { updateLineDiscount } = usePOSStore.getState();
+                            let val = parseInt(e.target.value) || 0;
+                            if (line.discountType === "percent") {
+                              val = Math.min(100, Math.max(0, val));
+                            } else {
+                              val = Math.min(line.unitPrice, Math.max(0, val));
+                            }
+                            updateLineDiscount(line.id, line.discountType || "percent", val);
+                          }}
+                          className="w-full h-8 text-right pr-4 font-black rounded-lg border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        />
+                        <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] font-black text-stone-400">
+                          {line.discountType === "percent" ? "%" : "₨"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
