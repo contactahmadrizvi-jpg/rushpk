@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
-
+import { Analytics } from "@vercel/analytics/next"
 const dmSans = DM_Sans({
   subsets: ["latin"],
   variable: "--font-dm-sans",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     default: "Rush Pizza and Burger Sheikhupura - Order Food Online | Rusk PK",
     template: "%s | Rush Pizza & Burger Sheikhupura"
   },
-  description: "Order premium, delicious pizza, gourmet burgers, and wraps online from Rush Pizza and Burger in Sheikhupura, Pakistan. Fast home delivery and hot takeaway options.",
+  description: "Order premium, delicious pizza, best burgers, and wraps online from Rush Pizza and Burger in Sheikhupura, Pakistan. Fast home delivery and hot takeaway options.",
   keywords: [
     "pizza in sheikhupura",
     "burgers in sheikhupura",
