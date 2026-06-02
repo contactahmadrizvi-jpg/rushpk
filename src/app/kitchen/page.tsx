@@ -204,6 +204,13 @@ export default function KitchenPage() {
   // Print Bill / Re-Print — always prints directly, never asks for payment method
   async function handlePrintBill(order: Order) {
     try {
+      const num = order.dailyOrderNumber ?? order.orderNumber;
+      const confirmed = window.confirm(`Print Receipt/Bill for Order #${num}?`);
+      if (!confirmed) {
+        toast.error("Print cancelled.");
+        return;
+      }
+
       if (order.id.startsWith("local-")) {
         const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
         const idx = pending.findIndex((o: any) => o.id === order.id);
@@ -285,7 +292,10 @@ export default function KitchenPage() {
       }
 
       toast.success("Payment completed and order marked served!");
-      void printReceipt(finalOrder);
+      const num = finalOrder.dailyOrderNumber ?? finalOrder.orderNumber;
+      if (window.confirm(`Settle completed. Print receipt for Order #${num}?`)) {
+        void printReceipt(finalOrder);
+      }
       setSettlingOrder(null);
       setCreditName("");
     } catch (err) {
