@@ -93,7 +93,10 @@ function printHtmlOnce(html: string): Promise<void> {
 
   return new Promise((resolve) => {
     const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    // Give iframe a real 58mm width (≈220px at 96dpi) so the browser renders
+    // at the correct thermal-paper width. Zero width causes the browser to
+    // fall back to screen width then print a huge blank A4-height page.
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:220px;height:1px;border:0;opacity:0;pointer-events:none;";
     document.body.appendChild(iframe);
 
     const win = iframe.contentWindow;
@@ -140,7 +143,9 @@ function printHtmlOnce(html: string): Promise<void> {
 }
 
 function wrapPrintDocument(body: string, title: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${body}</body></html>`;
+  // html and body must be height:auto so the browser only prints
+  // as much paper as the content requires — prevents blank leading paper.
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>html,body{height:auto!important;overflow:visible!important;}</style></head><body>${body}</body></html>`;
 }
 
 function itemExtras(item: OrderItem): string {
@@ -185,12 +190,15 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   return `
 <style>
   @page { size: 58mm auto; margin: 0; }
+  html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: "Courier New", Courier, monospace;
     font-size: 10px;
     width: 50mm;
     max-width: 50mm;
+    height: auto !important;
+    overflow: visible !important;
     margin: 0 auto;
     padding: 2px 2px;
     color: #000;
@@ -270,8 +278,9 @@ function buildKOTBody(order: Order): string {
   return `
 <style>
   @page { size: 58mm auto; margin: 0; }
+  html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; width: 50mm; margin: 0 auto; padding: 2px 2px; color: #000; text-transform: none; }
+  body { font-family: Arial, sans-serif; font-size: 10px; width: 50mm; height: auto !important; overflow: visible !important; margin: 0 auto; padding: 2px 2px; color: #000; text-transform: none; }
   h1 { font-size: 11px; margin: 0 0 4px; font-weight: 800; }
   .badge { display: inline-block; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
   .order-no { font-size: 24px; font-weight: 900; margin: 3px 0; }
