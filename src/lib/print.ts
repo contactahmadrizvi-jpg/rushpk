@@ -143,16 +143,12 @@ function printHtmlOnce(html: string): Promise<void> {
 }
 
 function wrapPrintDocument(body: string, title: string): string {
-  // The @page rule MUST live in the wrapper document's <head> style to be
-  // honoured by the browser. Putting it only inside body-level <style> tags
-  // is unreliable and causes the browser to fall back to its default page
-  // size (Letter/A4), producing huge blank white space on thermal receipts.
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
 @page { size: 58mm auto; margin: 0mm; }
 * { box-sizing: border-box; }
-html, body { height: auto !important; overflow: visible !important; margin: 0; padding: 0; }
+html, body { height: auto !important; overflow: visible !important; margin: 0; padding: 0; background: #fff; }
 @media print {
-  html, body { width: 58mm; max-width: 58mm; }
+  html, body { width: 100%; margin: 0; padding: 0; }
 }
 </style></head><body>${body}</body></html>`;
 }
@@ -175,16 +171,18 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   const dt = formatReceiptDateTime(order.createdAt);
   const tableLine =
     order.tableNumber != null
-      ? `<div class="row"><span>TABLE</span><span>${order.tableNumber}</span></div>`
-      : `<div class="row"><span>TYPE</span><span>${orderTypeLabel(order.type)}</span></div>`;
+      ? `<table class="w-table"><tr><td>TABLE</td><td class="text-right">${order.tableNumber}</td></tr></table>`
+      : `<table class="w-table"><tr><td>TYPE</td><td class="text-right">${orderTypeLabel(order.type)}</td></tr></table>`;
 
   const itemRows = order.items
     .map(
       (i) => `
-    <div class="item-row">
-      <span class="item-name">${i.quantity}X ${escapeHtml(i.name.toUpperCase())}</span>
-      <span class="item-price">${formatCurrency(i.subtotal)}</span>
-    </div>${itemExtras(i)}`
+    <table class="w-table item-table">
+      <tr>
+        <td class="item-name">${i.quantity}X ${escapeHtml(i.name.toUpperCase())}</td>
+        <td class="item-price text-right">${formatCurrency(i.subtotal)}</td>
+      </tr>
+    </table>${itemExtras(i)}`
     )
     .join("");
 
@@ -203,46 +201,47 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   body {
     font-family: "Courier New", Courier, monospace;
     font-size: 10px;
-    width: 58mm;
-    max-width: 58mm;
+    width: 100%;
+    max-width: 100%;
     height: auto !important;
     overflow: visible !important;
     margin: 0;
-    padding: 2px 4px;
+    padding: 0px 2px;
     color: #000;
     background: #fff;
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
   .center { text-align: center; }
-  .logo-icon { font-size: 18px; margin-bottom: 3px; }
+  .text-right { text-align: right; }
+  .logo-icon { font-size: 18px; margin-bottom: 2px; }
   .logo-img { max-height: 28px; margin: 0 auto 4px; display: block; }
-  .brand { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
-  .sub { font-size: 8px; margin-top: 2px; line-height: 1.3; font-weight: 400; }
-  .rule { border: none; border-top: 1px solid #000; margin: 6px 0; }
+  .brand { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; word-break: break-word; overflow-wrap: break-word; }
+  .sub { font-size: 8px; margin-top: 1px; line-height: 1.2; font-weight: 400; word-break: break-word; overflow-wrap: break-word; }
+  .rule { border: none; border-top: 1px solid #000; margin: 4px 0; }
   .rule-dash { border: none; border-top: 1px dashed #000; margin: 4px 0; }
-  .datetime { font-size: 9px; margin: 4px 0; }
-  .row { display: flex; justify-content: space-between; font-size: 9px; margin: 2px 0; }
-  .item-row { display: flex; justify-content: space-between; gap: 4px; margin: 4px 0; font-size: 10px; }
-  .item-name { flex: 1; font-weight: 700; word-break: break-word; overflow-wrap: break-word; }
-  .item-price { white-space: nowrap; font-weight: 700; }
-  .item-note { font-size: 8px; margin: -1px 0 3px 6px; text-transform: none; font-weight: 400; }
-  .totals .row { margin: 3px 0; }
-  .total-big { font-size: 12px; font-weight: 900; margin-top: 3px; padding-top: 3px; border-top: 2px solid #000; }
-  .pay-grid { font-size: 8px; margin-top: 5px; }
-  .pay-grid .row { margin: 2px 0; }
-  .footer { text-align: center; font-size: 8px; margin-top: 8px; line-height: 1.4; font-weight: 400; }
-  .addr { font-size: 8px; margin: 3px 0; text-transform: none; }
-  .customer { font-size: 9px; margin: 3px 0; text-transform: none; }
+  .datetime { font-size: 9px; margin: 3px 0; }
+  .w-table { width: 100%; border-collapse: collapse; font-size: 9px; margin: 2px 0; table-layout: fixed; }
+  .w-table td { vertical-align: top; overflow-wrap: break-word; word-break: break-word; }
+  .item-table { margin: 4px 0; font-size: 10px; }
+  .item-name { font-weight: 700; width: 70%; }
+  .item-price { font-weight: 700; width: 30%; white-space: nowrap; }
+  .item-note { font-size: 8px; margin: -1px 0 3px 6px; text-transform: none; font-weight: 400; word-break: break-word; overflow-wrap: break-word; }
+  .totals { margin: 3px 0; }
+  .total-big td { font-size: 11px; font-weight: 900; padding-top: 3px; border-top: 2px solid #000; }
+  .pay-grid { font-size: 8px; margin-top: 4px; }
+  .footer { text-align: center; font-size: 8px; margin-top: 6px; line-height: 1.3; font-weight: 400; }
+  .addr { font-size: 8px; margin: 3px 0; text-transform: none; word-break: break-word; overflow-wrap: break-word; }
+  .customer { font-size: 8px; margin: 3px 0; text-transform: none; word-break: break-word; overflow-wrap: break-word; }
 </style>
-<div class="center">${logo}</div>
+<div class="center" style="margin-top: 0px; padding-top: 0px;">${logo}</div>
 <div class="center brand">${escapeHtml(header.name)}</div>
 <div class="center sub">${escapeHtml(header.location)}</div>
 <div class="center sub">PHONE: ${escapeHtml(header.phone)}</div>
 ${header.email ? `<div class="center sub">${escapeHtml(header.email)}</div>` : ""}
 <hr class="rule" />
 <div class="center datetime">${dt}</div>
-<div class="row"><span>RECEIPT</span><span>${label}</span></div>
+<table class="w-table"><tr><td>RECEIPT</td><td class="text-right">${label}</td></tr></table>
 ${tableLine}
 <div class="customer">${escapeHtml(order.customerName)} · ${escapeHtml(order.customerPhone)}</div>
 ${addr}
@@ -251,17 +250,17 @@ ${order.deliveryNotes ? `<div class="customer">NOTES: ${escapeHtml(order.deliver
 ${itemRows}
 <hr class="rule" />
 <div class="totals">
-  <div class="row"><span>SUBTOTAL</span><span>${formatCurrency(order.subtotal)}</span></div>
-  ${order.discount > 0 ? `<div class="row"><span>DISCOUNT</span><span>-${formatCurrency(order.discount)}</span></div>` : ""}
-  ${order.tax > 0 ? `<div class="row"><span>TAX</span><span>${formatCurrency(order.tax)}</span></div>` : ""}
-  ${order.deliveryCharge > 0 ? `<div class="row"><span>DELIVERY</span><span>${formatCurrency(order.deliveryCharge)}</span></div>` : ""}
-  <div class="row total-big"><span>TOTAL</span><span>${formatCurrency(order.total)}</span></div>
+  <table class="w-table"><tr><td>SUBTOTAL</td><td class="text-right">${formatCurrency(order.subtotal)}</td></tr></table>
+  ${order.discount > 0 ? `<table class="w-table"><tr><td>DISCOUNT</td><td class="text-right">-${formatCurrency(order.discount)}</td></tr></table>` : ""}
+  ${order.tax > 0 ? `<table class="w-table"><tr><td>TAX</td><td class="text-right">${formatCurrency(order.tax)}</td></tr></table>` : ""}
+  ${order.deliveryCharge > 0 ? `<table class="w-table"><tr><td>DELIVERY</td><td class="text-right">${formatCurrency(order.deliveryCharge)}</td></tr></table>` : ""}
+  <table class="w-table total-big"><tr><td>TOTAL</td><td class="text-right">${formatCurrency(order.total)}</td></tr></table>
 </div>
 <hr class="rule-dash" />
 <div class="pay-grid">
-  <div class="row"><span>METHOD</span><span>${order.paymentMethod.toUpperCase()}</span></div>
-  <div class="row"><span>STATUS</span><span>${order.paymentStatus.toUpperCase()}</span></div>
-  <div class="row"><span>SOURCE</span><span>${order.source === "website" ? "ONLINE" : "POS"}</span></div>
+  <table class="w-table"><tr><td>METHOD</td><td class="text-right">${order.paymentMethod.toUpperCase()}</td></tr></table>
+  <table class="w-table"><tr><td>STATUS</td><td class="text-right">${order.paymentStatus.toUpperCase()}</td></tr></table>
+  <table class="w-table"><tr><td>SOURCE</td><td class="text-right">${order.source === "website" ? "ONLINE" : "POS"}</td></tr></table>
 </div>
 <hr class="rule-dash" />
 <div class="footer">
@@ -287,21 +286,21 @@ function buildKOTBody(order: Order): string {
 <style>
   html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; width: 58mm; max-width: 58mm; height: auto !important; overflow: visible !important; margin: 0; padding: 2px 4px; color: #000; text-transform: none; }
-  h1 { font-size: 11px; margin: 0 0 4px; font-weight: 800; }
+  body { font-family: Arial, sans-serif; font-size: 10px; width: 100%; max-width: 100%; height: auto !important; overflow: visible !important; margin: 0; padding: 0px 2px; color: #000; text-transform: none; }
+  h1 { font-size: 11px; margin: 0 0 3px; font-weight: 800; }
   .badge { display: inline-block; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
-  .order-no { font-size: 24px; font-weight: 900; margin: 3px 0; }
+  .order-no { font-size: 24px; font-weight: 900; margin: 2px 0; line-height: 1; }
   .kot-item { border-bottom: 2px dashed #000; padding: 4px 0; }
   .kot-qty { font-size: 12px; font-weight: 800; word-break: break-word; overflow-wrap: break-word; white-space: normal; }
-  .item-note { font-size: 9px; color: #b45309; margin-top: 2px; }
+  .item-note { font-size: 9px; color: #b45309; margin-top: 2px; word-break: break-word; overflow-wrap: break-word; }
 </style>
-<h1>KITCHEN ORDER TICKET</h1>
+<h1 style="margin-top: 0px; padding-top: 0px;">KITCHEN ORDER TICKET</h1>
 <span class="badge">${order.source === "website" ? "ONLINE" : "POS"}</span>
 <div class="order-no">${label}</div>
 <p><strong>${orderTypeLabel(order.type)}</strong>${order.tableNumber != null ? ` · Table ${order.tableNumber}` : ""}</p>
 <p style="font-size:11px">${formatReceiptDateTime(order.createdAt)}</p>
 <p><strong>${escapeHtml(order.customerName)}</strong><br/>${escapeHtml(order.customerPhone)}</p>
-<hr style="border:none;border-top:2px solid #000;margin:8px 0"/>
+<hr style="border:none;border-top:2px solid #000;margin:6px 0"/>
 ${items}`;
 }
 
