@@ -96,7 +96,7 @@ function printHtmlOnce(html: string): Promise<void> {
     // Give iframe a real 58mm width (≈220px at 96dpi) so the browser renders
     // at the correct thermal-paper width. Zero width causes the browser to
     // fall back to screen width then print a huge blank A4-height page.
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:220px;height:1px;border:0;opacity:0;pointer-events:none;";
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:58mm;height:1px;border:0;opacity:0;pointer-events:none;";
     document.body.appendChild(iframe);
 
     const win = iframe.contentWindow;
@@ -143,9 +143,18 @@ function printHtmlOnce(html: string): Promise<void> {
 }
 
 function wrapPrintDocument(body: string, title: string): string {
-  // html and body must be height:auto so the browser only prints
-  // as much paper as the content requires — prevents blank leading paper.
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>html,body{height:auto!important;overflow:visible!important;}</style></head><body>${body}</body></html>`;
+  // The @page rule MUST live in the wrapper document's <head> style to be
+  // honoured by the browser. Putting it only inside body-level <style> tags
+  // is unreliable and causes the browser to fall back to its default page
+  // size (Letter/A4), producing huge blank white space on thermal receipts.
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+@page { size: 58mm auto; margin: 0mm; }
+* { box-sizing: border-box; }
+html, body { height: auto !important; overflow: visible !important; margin: 0; padding: 0; }
+@media print {
+  html, body { width: 58mm; max-width: 58mm; }
+}
+</style></head><body>${body}</body></html>`;
 }
 
 function itemExtras(item: OrderItem): string {
@@ -189,7 +198,6 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
 
   return `
 <style>
-  @page { size: 58mm auto; margin: 0; }
   html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -277,7 +285,6 @@ function buildKOTBody(order: Order): string {
 
   return `
 <style>
-  @page { size: 58mm auto; margin: 0; }
   html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 10px; width: 50mm; height: auto !important; overflow: visible !important; margin: 0 auto; padding: 2px 2px; color: #000; text-transform: none; }
