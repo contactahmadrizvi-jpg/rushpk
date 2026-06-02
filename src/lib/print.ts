@@ -203,12 +203,12 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   body {
     font-family: "Courier New", Courier, monospace;
     font-size: 10px;
-    width: 50mm;
-    max-width: 50mm;
+    width: 58mm;
+    max-width: 58mm;
     height: auto !important;
     overflow: visible !important;
-    margin: 0 auto;
-    padding: 2px 2px;
+    margin: 0;
+    padding: 2px 4px;
     color: #000;
     background: #fff;
     text-transform: uppercase;
@@ -287,7 +287,7 @@ function buildKOTBody(order: Order): string {
 <style>
   html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; width: 50mm; height: auto !important; overflow: visible !important; margin: 0 auto; padding: 2px 2px; color: #000; text-transform: none; }
+  body { font-family: Arial, sans-serif; font-size: 10px; width: 58mm; max-width: 58mm; height: auto !important; overflow: visible !important; margin: 0; padding: 2px 4px; color: #000; text-transform: none; }
   h1 { font-size: 11px; margin: 0 0 4px; font-weight: 800; }
   .badge { display: inline-block; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
   .order-no { font-size: 24px; font-weight: 900; margin: 3px 0; }
