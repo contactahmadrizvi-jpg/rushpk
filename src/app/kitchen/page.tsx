@@ -404,7 +404,7 @@ export default function KitchenPage() {
   );
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 overflow-hidden">
+    <div className="flex h-full flex-col bg-slate-50 overflow-hidden">
       <header className="flex shrink-0 items-center justify-between border-b bg-white px-6 py-4 shadow-sm">
         <div className="space-y-1">
           <Link href="/admin" className="text-xs font-semibold text-slate-500 hover:text-primary">

@@ -292,7 +292,7 @@ export default function POSPage() {
   }, [placeOrder, cartStep, items.length]);
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f8f4ef]">
+    <div className="flex h-full flex-col overflow-hidden bg-[#f8f4ef]">
 
       {/* ── Top Header ── */}
       <header className="shrink-0 border-b border-stone-200/80 bg-white/90 px-3 py-3 backdrop-blur-md sm:px-5">
@@ -338,7 +338,7 @@ export default function POSPage() {
       </header>
 
       {/* ── Main Split Layout ── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden" style={{ height: "calc(100vh - 180px)", maxHeight: "calc(100vh - 180px)" }}>
+      <div className="flex flex-1 min-h-0 overflow-hidden" style={{ height: "calc(100% - 150px)", maxHeight: "calc(100% - 150px)" }}>
 
         {/* ── LEFT: Menu Grid (60%) ── */}
         <main className="flex flex-col overflow-hidden" style={{ width: "60%" }}>
