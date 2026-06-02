@@ -408,7 +408,7 @@ export default function POSPage() {
 
         {/* ── RIGHT: Cart Sidebar (40%) ── */}
         <aside
-          className="flex flex-col bg-white border-l-2 border-stone-200 shadow-[-4px_0_20px_rgba(0,0,0,0.06)]"
+          className="flex flex-col overflow-hidden bg-white border-l-2 border-stone-200 shadow-[-4px_0_20px_rgba(0,0,0,0.06)]"
           style={{ width: "40%", minWidth: "360px" }}
         >
           {cartStep === "cart" ? (

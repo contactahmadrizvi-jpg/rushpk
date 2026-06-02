@@ -63,6 +63,8 @@ export default function ReportsPage() {
   const cash = orders.filter((o) => o.paymentMethod === "cash" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
   const online = orders.filter((o) => o.paymentMethod === "online" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
   const card = orders.filter((o) => o.paymentMethod === "card" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
+  const websiteRevenue = orders.filter((o) => o.source === "website" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
+  const websiteCount = orders.filter((o) => o.source === "website" && o.status !== "cancelled").length;
   const totalRevenue = cash + online + card;
 
   if (loading) {
@@ -136,7 +138,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Reports Metrics Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Revenue</p>
           <p className="mt-2 text-2xl font-black text-primary">{formatCurrency(totalRevenue)}</p>
@@ -152,6 +154,11 @@ export default function ReportsPage() {
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Online Revenue</p>
           <p className="mt-2 text-2xl font-bold text-stone-900">{formatCurrency(online)}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Website Orders</p>
+          <p className="mt-2 text-2xl font-bold text-blue-600">{formatCurrency(websiteRevenue)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{websiteCount} orders</p>
         </div>
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Orders</p>
