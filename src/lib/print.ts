@@ -148,7 +148,7 @@ function wrapPrintDocument(body: string, title: string): string {
 * { box-sizing: border-box; }
 html, body { height: auto !important; overflow: visible !important; margin: 0; padding: 0; background: #fff; }
 @media print {
-  html, body { width: 100%; margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; }
 }
 </style></head><body>${body}</body></html>`;
 }
@@ -200,12 +200,12 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 10px;
-    width: 48mm;
-    max-width: 48mm;
+    width: 44mm;
+    max-width: 44mm;
     height: auto !important;
     overflow: visible !important;
     margin: 0;
-    padding: 0;
+    padding: 0 2px 0 0;
     color: #000;
     background: #fff;
     text-transform: uppercase;
@@ -286,8 +286,8 @@ function buildKOTBody(order: Order): string {
   body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 10px;
-    width: 48mm;
-    max-width: 48mm;
+    width: 44mm;
+    max-width: 44mm;
     height: auto !important;
     overflow: visible !important;
     margin: 0;
