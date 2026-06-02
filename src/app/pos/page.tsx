@@ -227,18 +227,22 @@ export default function POSPage() {
     try {
       const { order } = buildInstantPosOrder(inputData);
       const num = order.dailyOrderNumber ?? order.orderNumber;
-      await printKOT(order);
+
+      // ── Confirm FIRST — cancel means NO print and NO kitchen send ──
       const confirmed = window.confirm(
-        `Did you successfully print the kitchen order ticket (KOT)?\nClick 'OK' to send Order #${num} to kitchen, or 'Cancel' to discard the order.`
+        `Send Order #${num} to Kitchen?\n\nClick OK to print KOT & send to kitchen.\nClick Cancel to discard this order.`
       );
       if (!confirmed) {
         const m = await import("@/lib/pos-instant");
         m.removePendingByLocalId(order.id);
         window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-        toast.error("Order printing cancelled. Order was not sent to kitchen.");
+        toast.error("Order cancelled. Nothing was sent to kitchen.");
         setPaying(false);
         return;
       }
+
+      // User confirmed — print now
+      await printKOT(order);
       if (orderType === "delivery") {
         try {
           const { doc: fsDoc, setDoc } = await import("firebase/firestore");
@@ -487,37 +491,34 @@ export default function POSPage() {
                         </div>
 
                         {/* Per-item Discount */}
-                        <div className="mt-2.5 flex items-center justify-between gap-2 pl-[76px]">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Discount</span>
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex rounded-md bg-stone-100 p-0.5">
+                        <div className="mt-2 flex items-center justify-between gap-2 pl-[76px]">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Disc</span>
+                          <div className="flex items-center gap-1">
+                            {/* Type toggle */}
+                            <div className="flex rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
                               <button type="button"
                                 onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "percent", line.discountValue ?? 0); }}
-                                className={cn("px-2 py-1 text-[10px] font-black rounded transition-all",
-                                  line.discountType === "percent" ? "bg-white text-stone-900 shadow-xs" : "text-stone-400 hover:text-stone-600"
+                                className={cn("px-2.5 py-1 text-[10px] font-black transition-all",
+                                  line.discountType === "percent" ? "bg-primary text-white" : "text-stone-400 hover:text-stone-600"
                                 )}>%</button>
                               <button type="button"
                                 onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "cash", line.discountValue ?? 0); }}
-                                className={cn("px-2 py-1 text-[10px] font-black rounded transition-all",
-                                  line.discountType === "cash" ? "bg-white text-stone-900 shadow-xs" : "text-stone-400 hover:text-stone-600"
+                                className={cn("px-2.5 py-1 text-[10px] font-black transition-all",
+                                  line.discountType === "cash" ? "bg-primary text-white" : "text-stone-400 hover:text-stone-600"
                                 )}>Rs</button>
                             </div>
-                            <div className="relative w-20">
-                              <input
-                                type="number" min="0" value={line.discountValue || ""} placeholder="0"
-                                onChange={(e) => {
-                                  const { updateLineDiscount } = usePOSStore.getState();
-                                  let val = parseInt(e.target.value) || 0;
-                                  if (line.discountType === "percent") val = Math.min(100, Math.max(0, val));
-                                  else val = Math.min(line.unitPrice, Math.max(0, val));
-                                  updateLineDiscount(line.id, line.discountType || "percent", val);
-                                }}
-                                className="w-full h-7 text-right pr-5 font-bold rounded-md border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                              />
-                              <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-stone-400">
-                                {line.discountType === "percent" ? "%" : "₨"}
-                              </span>
-                            </div>
+                            {/* Value input */}
+                            <input
+                              type="number" min="0" value={line.discountValue || ""} placeholder="0"
+                              onChange={(e) => {
+                                const { updateLineDiscount } = usePOSStore.getState();
+                                let val = parseInt(e.target.value) || 0;
+                                if (line.discountType === "percent") val = Math.min(100, Math.max(0, val));
+                                else val = Math.min(line.unitPrice, Math.max(0, val));
+                                updateLineDiscount(line.id, line.discountType || "percent", val);
+                              }}
+                              className="w-16 h-7 text-right px-2 font-bold rounded-lg border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                            />
                           </div>
                         </div>
                       </li>

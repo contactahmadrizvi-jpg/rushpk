@@ -13,6 +13,7 @@ export type PrintHeader = {
 
 let cachedHeader: PrintHeader | null = null;
 let printChain: Promise<void> = Promise.resolve();
+let isPrinting = false;
 
 function formatOrderLabel(order: Order): string {
   const n = order.dailyOrderNumber ?? order.orderNumber;
@@ -79,12 +80,17 @@ export async function printKOT(order: Order): Promise<void> {
 }
 
 function enqueuePrint(html: string): Promise<void> {
+  // Prevent queuing a new print while one is in progress
+  if (isPrinting) return Promise.resolve();
   const job = printChain.then(() => printHtmlOnce(html));
   printChain = job.catch(() => undefined);
   return job;
 }
 
 function printHtmlOnce(html: string): Promise<void> {
+  if (isPrinting) return Promise.resolve();
+  isPrinting = true;
+
   return new Promise((resolve) => {
     const iframe = document.createElement("iframe");
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
@@ -93,6 +99,7 @@ function printHtmlOnce(html: string): Promise<void> {
     const win = iframe.contentWindow;
     const doc = win?.document;
     if (!doc || !win) {
+      isPrinting = false;
       iframe.remove();
       resolve();
       return;
@@ -102,12 +109,20 @@ function printHtmlOnce(html: string): Promise<void> {
     doc.write(html);
     doc.close();
 
+    // Guard: runPrint must only execute once even if both the
+    // readyState===complete branch AND iframe.onload fire.
+    let hasPrinted = false;
     const done = () => {
-      setTimeout(() => iframe.remove(), 300);
+      isPrinting = false;
+      setTimeout(() => iframe.remove(), 500);
       resolve();
     };
 
     const runPrint = () => {
+      if (hasPrinted) return;
+      hasPrinted = true;
+      // Remove onload handler to prevent any late fires
+      iframe.onload = null;
       try {
         win.focus();
         win.print();
@@ -116,8 +131,11 @@ function printHtmlOnce(html: string): Promise<void> {
       }
     };
 
-    if (doc.readyState === "complete") runPrint();
-    else iframe.onload = runPrint;
+    if (doc.readyState === "complete") {
+      runPrint();
+    } else {
+      iframe.onload = runPrint;
+    }
   });
 }
 
@@ -166,40 +184,40 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
 
   return `
 <style>
-  @page { size: 80mm auto; margin: 3mm; }
+  @page { size: 58mm auto; margin: 2mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: "Courier New", Courier, monospace;
-    font-size: 11px;
-    width: 72mm;
-    max-width: 72mm;
+    font-size: 10px;
+    width: 54mm;
+    max-width: 54mm;
     margin: 0 auto;
-    padding: 6px 4px;
+    padding: 4px 2px;
     color: #000;
     background: #fff;
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
   .center { text-align: center; }
-  .logo-icon { font-size: 22px; margin-bottom: 4px; }
-  .logo-img { max-height: 36px; margin: 0 auto 6px; display: block; }
-  .brand { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; }
-  .sub { font-size: 9px; margin-top: 3px; line-height: 1.35; font-weight: 400; }
-  .rule { border: none; border-top: 1px solid #000; margin: 8px 0; }
-  .rule-dash { border: none; border-top: 1px dashed #000; margin: 6px 0; }
-  .datetime { font-size: 10px; margin: 6px 0; }
-  .row { display: flex; justify-content: space-between; font-size: 10px; margin: 2px 0; }
-  .item-row { display: flex; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 11px; }
+  .logo-icon { font-size: 18px; margin-bottom: 3px; }
+  .logo-img { max-height: 28px; margin: 0 auto 4px; display: block; }
+  .brand { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+  .sub { font-size: 8px; margin-top: 2px; line-height: 1.3; font-weight: 400; }
+  .rule { border: none; border-top: 1px solid #000; margin: 6px 0; }
+  .rule-dash { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+  .datetime { font-size: 9px; margin: 4px 0; }
+  .row { display: flex; justify-content: space-between; font-size: 9px; margin: 2px 0; }
+  .item-row { display: flex; justify-content: space-between; gap: 4px; margin: 4px 0; font-size: 10px; }
   .item-name { flex: 1; font-weight: 700; }
   .item-price { white-space: nowrap; font-weight: 700; }
-  .item-note { font-size: 9px; margin: -2px 0 4px 8px; text-transform: none; font-weight: 400; }
-  .totals .row { margin: 4px 0; }
-  .total-big { font-size: 13px; font-weight: 900; margin-top: 4px; padding-top: 4px; border-top: 2px solid #000; }
-  .pay-grid { font-size: 9px; margin-top: 6px; }
-  .pay-grid .row { margin: 3px 0; }
-  .footer { text-align: center; font-size: 9px; margin-top: 10px; line-height: 1.5; font-weight: 400; }
-  .addr { font-size: 9px; margin: 4px 0; text-transform: none; }
-  .customer { font-size: 10px; margin: 4px 0; text-transform: none; }
+  .item-note { font-size: 8px; margin: -1px 0 3px 6px; text-transform: none; font-weight: 400; }
+  .totals .row { margin: 3px 0; }
+  .total-big { font-size: 12px; font-weight: 900; margin-top: 3px; padding-top: 3px; border-top: 2px solid #000; }
+  .pay-grid { font-size: 8px; margin-top: 5px; }
+  .pay-grid .row { margin: 2px 0; }
+  .footer { text-align: center; font-size: 8px; margin-top: 8px; line-height: 1.4; font-weight: 400; }
+  .addr { font-size: 8px; margin: 3px 0; text-transform: none; }
+  .customer { font-size: 9px; margin: 3px 0; text-transform: none; }
 </style>
 <div class="center">${logo}</div>
 <div class="center brand">${escapeHtml(header.name)}</div>
@@ -251,14 +269,14 @@ function buildKOTBody(order: Order): string {
 
   return `
 <style>
-  @page { size: 72mm auto; margin: 3mm; }
-  body { font-family: Arial, sans-serif; font-size: 12px; width: 68mm; margin: 0; padding: 8px; color: #000; text-transform: none; }
-  h1 { font-size: 13px; margin: 0 0 8px; font-weight: 800; }
-  .badge { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
-  .order-no { font-size: 32px; font-weight: 900; margin: 8px 0; }
-  .kot-item { border-bottom: 2px dashed #000; padding: 8px 0; }
-  .kot-qty { font-size: 18px; font-weight: 800; }
-  .item-note { font-size: 11px; color: #b45309; margin-top: 4px; }
+  @page { size: 58mm auto; margin: 2mm; }
+  body { font-family: Arial, sans-serif; font-size: 11px; width: 54mm; margin: 0; padding: 6px 4px; color: #000; text-transform: none; }
+  h1 { font-size: 12px; margin: 0 0 6px; font-weight: 800; }
+  .badge { display: inline-block; padding: 2px 6px; font-size: 9px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
+  .order-no { font-size: 28px; font-weight: 900; margin: 6px 0; }
+  .kot-item { border-bottom: 2px dashed #000; padding: 6px 0; }
+  .kot-qty { font-size: 16px; font-weight: 800; }
+  .item-note { font-size: 10px; color: #b45309; margin-top: 3px; }
 </style>
 <h1>KITCHEN ORDER TICKET</h1>
 <span class="badge">${order.source === "website" ? "ONLINE" : "POS"}</span>
