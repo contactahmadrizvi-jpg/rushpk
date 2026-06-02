@@ -639,7 +639,7 @@ export default function POSPage() {
 
                 {/* Dine-in Table selector */}
                 {orderType === "dine_in" && (
-                  <div className="border-t pt-4 border-stone-100 space-y-2.5">
+                  <div className="border-t pt-4 border-stone-100 mb-10">
                     <button type="button" onClick={() => setShowDialpad(true)}
                       className={cn(
                         "flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-sm font-bold hover:opacity-90 transition",
