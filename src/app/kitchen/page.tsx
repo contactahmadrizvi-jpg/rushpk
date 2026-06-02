@@ -511,6 +511,39 @@ export default function KitchenPage() {
                           )}
                         </div>
 
+                        {(order.customerName || order.customerPhone || order.deliveryAddress) && (
+                          <div className="mt-2 bg-slate-50 p-2 rounded-xl border border-slate-100 text-[11px] font-semibold text-slate-600 space-y-1">
+                            {order.customerName && (
+                              <div className="flex items-center gap-1.5 text-slate-800">
+                                <span>👤</span>
+                                <span>{order.customerName}</span>
+                              </div>
+                            )}
+                            {order.customerPhone && (
+                              <div className="flex items-center gap-1.5 text-slate-600">
+                                <span>📞</span>
+                                <a href={`tel:${order.customerPhone}`} className="hover:text-primary transition">
+                                  {order.customerPhone}
+                                </a>
+                              </div>
+                            )}
+                            {order.type === "delivery" && order.deliveryAddress && (
+                              <div className="flex items-start gap-1.5 text-slate-500 leading-snug">
+                                <span className="shrink-0">📍</span>
+                                <span>
+                                  {[
+                                    order.deliveryAddress.street,
+                                    order.deliveryAddress.area,
+                                    order.deliveryAddress.city,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(", ")}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <ul className="space-y-2.5 border-t border-slate-100 pt-3">
                           {order.items.map((item, i) => (
                             <li key={i} className="text-sm font-bold text-slate-800 flex items-start justify-between">

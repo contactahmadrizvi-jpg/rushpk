@@ -12,9 +12,9 @@ import { getInventoryItems, inventoryRepo, recipeRepo, adjustStock, movementRepo
 import { useAuthStore } from "@/stores/auth-store";
 import type { InventoryItem, Recipe, InventoryUnit, StockMovement } from "@/types";
 import { TableRowsSkeleton } from "@/components/ui/loading-skeletons";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { ClipboardList, PlusCircle, History, Package, AlertTriangle, Database, Plus, Trash } from "lucide-react";
-import { orderBy, limit } from "@/services/base.repository";
+import { orderBy, limit, where } from "@/services/base.repository";
 
 export default function AdminInventoryPage() {
   const [loading, setLoading] = useState(true);
@@ -44,6 +44,14 @@ export default function AdminInventoryPage() {
   const [entryNotes, setEntryNotes] = useState("");
   const [submittingEntry, setSubmittingEntry] = useState(false);
 
+  // Filter States for Daily Entry History Log
+  const [entryFilterType, setEntryFilterType] = useState<"day" | "this_month" | "prev_month">("day");
+  const [entrySelectedDate, setEntrySelectedDate] = useState(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+
   const load = async () => {
     setLoading(true);
     try {
@@ -57,11 +65,41 @@ export default function AdminInventoryPage() {
 
   useEffect(() => {
     load();
-    const unsub = movementRepo.subscribe([orderBy("createdAt", "desc"), limit(100)], (list) => {
+  }, []);
+
+  useEffect(() => {
+    let startIso: string;
+    let endIso: string;
+
+    if (entryFilterType === "day") {
+      const start = new Date(`${entrySelectedDate}T00:00:00`);
+      const end = new Date(`${entrySelectedDate}T23:59:59.999`);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    } else if (entryFilterType === "this_month") {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    } else {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    }
+
+    const unsub = movementRepo.subscribe([
+      where("createdAt", ">=", startIso),
+      where("createdAt", "<=", endIso),
+      orderBy("createdAt", "desc"),
+      limit(200)
+    ], (list) => {
       setMovements(list);
     });
     return () => unsub();
-  }, []);
+  }, [entryFilterType, entrySelectedDate]);
 
   if (loading) {
     return (
@@ -428,10 +466,39 @@ export default function AdminInventoryPage() {
 
           {/* History Log Table */}
           <div className="md:col-span-2 space-y-3">
-            <h3 className="font-black text-stone-850 flex items-center gap-1.5 text-sm">
-              <History className="h-4 w-4 text-stone-400" />
-              Stock Log History
-            </h3>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="font-black text-stone-850 flex items-center gap-1.5 text-sm">
+                <History className="h-4 w-4 text-stone-400" />
+                Stock Log History
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex gap-1 rounded-lg bg-stone-100/80 p-0.5 border text-[10px]">
+                  {(["day", "this_month", "prev_month"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setEntryFilterType(t)}
+                      className={cn(
+                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider transition-all",
+                        entryFilterType === t
+                          ? "bg-white text-stone-900 shadow-xs"
+                          : "text-stone-500 hover:text-stone-800"
+                      )}
+                    >
+                      {t === "day" ? "Day" : t === "this_month" ? "This Month" : "Prev Month"}
+                    </button>
+                  ))}
+                </div>
+                {entryFilterType === "day" && (
+                  <input
+                    type="date"
+                    value={entrySelectedDate}
+                    onChange={(e) => setEntrySelectedDate(e.target.value)}
+                    className="h-7 rounded-lg border bg-background px-2 text-[11px] font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                )}
+              </div>
+            </div>
             <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden text-xs">
               <table className="w-full text-left">
                 <thead className="bg-stone-50 border-b border-stone-100">

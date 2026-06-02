@@ -9,10 +9,15 @@ import { Edit, Trash2 } from "lucide-react";
 import { getFirestoreDb } from "@/lib/firebase/config";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 
-export default function CreditPurchasesPage() {
+export default function CreditSalesPage() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [filterType, setFilterType] = useState<"all" | "this_month" | "prev_month">("all");
+  const [filterType, setFilterType] = useState<"all" | "day" | "this_month" | "prev_month">("all");
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
 
   // Edit State
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -25,7 +30,12 @@ export default function CreditPurchasesPage() {
     let startIso: string | undefined = undefined;
     let endIso: string | undefined = undefined;
 
-    if (filterType === "this_month") {
+    if (filterType === "day") {
+      const start = new Date(`${selectedDate}T00:00:00`);
+      const end = new Date(`${selectedDate}T23:59:59.999`);
+      startIso = start.toISOString();
+      endIso = end.toISOString();
+    } else if (filterType === "this_month") {
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -65,7 +75,7 @@ export default function CreditPurchasesPage() {
       setLoading(false);
     }, startIso, endIso);
     return () => unsub();
-  }, [filterType]);
+  }, [filterType, selectedDate]);
 
   // Filter orders that were settled as "credit"
   const creditOrders = orders.filter(
@@ -194,7 +204,7 @@ export default function CreditPurchasesPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Credit Purchases</h1>
+        <h1 className="text-2xl font-bold">Credit Sales</h1>
         <div className="mt-6">
           <StatsGridSkeleton count={2} />
         </div>
@@ -206,27 +216,38 @@ export default function CreditPurchasesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Credit Purchases</h1>
+          <h1 className="text-2xl font-bold">Credit Sales</h1>
           <p className="text-sm text-muted-foreground">
             Orders settled on credit. Track outstanding amounts owed by customers.
           </p>
         </div>
-        <div className="flex gap-2 rounded-xl bg-stone-100 p-1 border border-stone-200/40 shrink-0">
-          {(["all", "this_month", "prev_month"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setFilterType(t)}
-              className={cn(
-                "rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition-all",
-                filterType === t
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "text-stone-500 hover:text-stone-800"
-              )}
-            >
-              {t === "all" ? "Show All" : t === "this_month" ? "This Month" : "Prev Month"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex gap-2 rounded-xl bg-stone-100 p-1 border border-stone-200/40">
+            {(["all", "day", "this_month", "prev_month"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setFilterType(t)}
+                className={cn(
+                  "rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition-all",
+                  filterType === t
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-800"
+                )}
+              >
+                {t === "all" ? "Show All" : t === "day" ? "Single Day" : t === "this_month" ? "This Month" : "Prev Month"}
+              </button>
+            ))}
+          </div>
+
+          {filterType === "day" && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="h-10 rounded-xl border bg-background px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          )}
         </div>
       </div>
 
@@ -310,7 +331,7 @@ export default function CreditPurchasesPage() {
                       type="button"
                       onClick={() => handleDelete(o.id)}
                       className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition active:scale-95"
-                      title="Delete Credit Purchase"
+                      title="Delete Credit Sale"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -321,7 +342,7 @@ export default function CreditPurchasesPage() {
             {creditOrders.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  No credit purchases found. Credit orders will appear here when settled
+                  No credit sales found. Credit orders will appear here when settled
                   with the "Credit Sale" option in Kitchen.
                 </td>
               </tr>
@@ -334,7 +355,7 @@ export default function CreditPurchasesPage() {
       {editingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-lg font-bold text-stone-900">Edit Credit Purchase</h3>
+            <h3 className="text-lg font-bold text-stone-900">Edit Credit Sale</h3>
             
             <div className="space-y-3">
               <div>

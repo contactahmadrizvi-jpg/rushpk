@@ -136,7 +136,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Reports Metrics Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Revenue</p>
           <p className="mt-2 text-2xl font-black text-primary">{formatCurrency(totalRevenue)}</p>
@@ -144,6 +144,10 @@ export default function ReportsPage() {
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cash Revenue</p>
           <p className="mt-2 text-2xl font-bold text-stone-900">{formatCurrency(cash)}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Card Revenue</p>
+          <p className="mt-2 text-2xl font-bold text-stone-900">{formatCurrency(card)}</p>
         </div>
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Online Revenue</p>
