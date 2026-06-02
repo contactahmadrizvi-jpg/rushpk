@@ -224,7 +224,7 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   .datetime { font-size: 9px; margin: 4px 0; }
   .row { display: flex; justify-content: space-between; font-size: 9px; margin: 2px 0; }
   .item-row { display: flex; justify-content: space-between; gap: 4px; margin: 4px 0; font-size: 10px; }
-  .item-name { flex: 1; font-weight: 700; }
+  .item-name { flex: 1; font-weight: 700; word-break: break-word; overflow-wrap: break-word; }
   .item-price { white-space: nowrap; font-weight: 700; }
   .item-note { font-size: 8px; margin: -1px 0 3px 6px; text-transform: none; font-weight: 400; }
   .totals .row { margin: 3px 0; }
@@ -292,7 +292,7 @@ function buildKOTBody(order: Order): string {
   .badge { display: inline-block; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
   .order-no { font-size: 24px; font-weight: 900; margin: 3px 0; }
   .kot-item { border-bottom: 2px dashed #000; padding: 4px 0; }
-  .kot-qty { font-size: 14px; font-weight: 800; }
+  .kot-qty { font-size: 12px; font-weight: 800; word-break: break-word; overflow-wrap: break-word; white-space: normal; }
   .item-note { font-size: 9px; color: #b45309; margin-top: 2px; }
 </style>
 <h1>KITCHEN ORDER TICKET</h1>
