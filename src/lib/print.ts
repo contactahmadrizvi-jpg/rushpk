@@ -162,7 +162,6 @@ function itemExtras(item: OrderItem): string {
   if (c.extraCheese) parts.push("Extra cheese");
   if (c.spiceLevel) parts.push(c.spiceLevel);
   if (c.notes) parts.push(c.notes);
-  if (!parts.length) return "";
   return `<div class="item-note">${escapeHtml(parts.join(" · "))}</div>`;
 }
 
@@ -199,40 +198,42 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
   html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: "Courier New", Courier, monospace;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 10px;
-    width: 100%;
-    max-width: 100%;
+    width: 48mm;
+    max-width: 48mm;
     height: auto !important;
     overflow: visible !important;
     margin: 0;
-    padding: 0px 2px;
+    padding: 0;
     color: #000;
     background: #fff;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   .center { text-align: center; }
   .text-right { text-align: right; }
-  .logo-icon { font-size: 18px; margin-bottom: 2px; }
+  .logo-icon { font-size: 16px; margin-bottom: 2px; }
   .logo-img { max-height: 28px; margin: 0 auto 4px; display: block; }
-  .brand { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; word-break: break-word; overflow-wrap: break-word; }
-  .sub { font-size: 8px; margin-top: 1px; line-height: 1.2; font-weight: 400; word-break: break-word; overflow-wrap: break-word; }
+  .brand { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; word-break: break-word; overflow-wrap: break-word; }
+  .sub { font-size: 8px; margin-top: 1px; line-height: 1.2; font-weight: 500; word-break: break-word; overflow-wrap: break-word; }
   .rule { border: none; border-top: 1px solid #000; margin: 4px 0; }
   .rule-dash { border: none; border-top: 1px dashed #000; margin: 4px 0; }
-  .datetime { font-size: 9px; margin: 3px 0; }
+  .datetime { font-size: 9px; margin: 3px 0; font-weight: 500; }
   .w-table { width: 100%; border-collapse: collapse; font-size: 9px; margin: 2px 0; table-layout: fixed; }
   .w-table td { vertical-align: top; overflow-wrap: break-word; word-break: break-word; }
-  .item-table { margin: 4px 0; font-size: 10px; }
+  .item-table { margin: 4px 0; font-size: 9px; }
   .item-name { font-weight: 700; width: 70%; }
   .item-price { font-weight: 700; width: 30%; white-space: nowrap; }
-  .item-note { font-size: 8px; margin: -1px 0 3px 6px; text-transform: none; font-weight: 400; word-break: break-word; overflow-wrap: break-word; }
+  .item-note { font-size: 8px; margin: -1px 0 3px 6px; text-transform: none; font-weight: 500; word-break: break-word; overflow-wrap: break-word; }
   .totals { margin: 3px 0; }
-  .total-big td { font-size: 11px; font-weight: 900; padding-top: 3px; border-top: 2px solid #000; }
-  .pay-grid { font-size: 8px; margin-top: 4px; }
-  .footer { text-align: center; font-size: 8px; margin-top: 6px; line-height: 1.3; font-weight: 400; }
+  .total-big td { font-size: 11px; font-weight: 800; padding-top: 3px; border-top: 1.5px solid #000; }
+  .pay-grid { font-size: 9px; margin-top: 4px; }
+  .footer { text-align: center; font-size: 8px; margin-top: 6px; line-height: 1.3; font-weight: 500; }
   .addr { font-size: 8px; margin: 3px 0; text-transform: none; word-break: break-word; overflow-wrap: break-word; }
-  .customer { font-size: 8px; margin: 3px 0; text-transform: none; word-break: break-word; overflow-wrap: break-word; }
+  .customer { font-size: 8px; margin: 3px 0; text-transform: none; word-break: break-word; overflow-wrap: break-word; font-weight: 600; }
 </style>
 <div class="center" style="margin-top: 0px; padding-top: 0px;">${logo}</div>
 <div class="center brand">${escapeHtml(header.name)}</div>
@@ -258,15 +259,12 @@ ${itemRows}
 </div>
 <hr class="rule-dash" />
 <div class="pay-grid">
-  <table class="w-table"><tr><td>METHOD</td><td class="text-right">${order.paymentMethod.toUpperCase()}</td></tr></table>
-  <table class="w-table"><tr><td>STATUS</td><td class="text-right">${order.paymentStatus.toUpperCase()}</td></tr></table>
-  <table class="w-table"><tr><td>SOURCE</td><td class="text-right">${order.source === "website" ? "ONLINE" : "POS"}</td></tr></table>
+  <table class="w-table"><tr><td>PAYMENT METHOD</td><td class="text-right">${order.paymentMethod.toUpperCase()} (${order.paymentStatus.toUpperCase()})</td></tr></table>
 </div>
-<hr class="rule-dash" />
 <div class="footer">
-  TIP IS NOT INCLUDED.<br/>
-  PLEASE COME AGAIN!<br/>
-  THANK YOU FOR DINING WITH US!
+  THANK YOU FOR YOUR VISIT!<br/>
+  PLEASE COME AGAIN!
+</div>
 </div>`;
 }
 
@@ -281,12 +279,24 @@ function buildKOTBody(order: Order): string {
     </div>`
     )
     .join("");
-
   return `
 <style>
   html { height: auto !important; overflow: visible !important; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; width: 100%; max-width: 100%; height: auto !important; overflow: visible !important; margin: 0; padding: 0px 2px; color: #000; text-transform: none; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 10px;
+    width: 48mm;
+    max-width: 48mm;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    text-transform: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
   h1 { font-size: 11px; margin: 0 0 3px; font-weight: 800; }
   .badge { display: inline-block; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
   .order-no { font-size: 24px; font-weight: 900; margin: 2px 0; line-height: 1; }
