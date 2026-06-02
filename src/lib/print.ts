@@ -184,15 +184,15 @@ function buildReceiptHTML(order: Order, header: PrintHeader): string {
 
   return `
 <style>
-  @page { size: 58mm auto; margin: 2mm; }
+  @page { size: 58mm auto; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: "Courier New", Courier, monospace;
     font-size: 10px;
-    width: 54mm;
-    max-width: 54mm;
+    width: 50mm;
+    max-width: 50mm;
     margin: 0 auto;
-    padding: 4px 2px;
+    padding: 2px 2px;
     color: #000;
     background: #fff;
     text-transform: uppercase;
@@ -269,14 +269,15 @@ function buildKOTBody(order: Order): string {
 
   return `
 <style>
-  @page { size: 58mm auto; margin: 2mm; }
-  body { font-family: Arial, sans-serif; font-size: 11px; width: 54mm; margin: 0; padding: 6px 4px; color: #000; text-transform: none; }
-  h1 { font-size: 12px; margin: 0 0 6px; font-weight: 800; }
-  .badge { display: inline-block; padding: 2px 6px; font-size: 9px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
-  .order-no { font-size: 28px; font-weight: 900; margin: 6px 0; }
-  .kot-item { border-bottom: 2px dashed #000; padding: 6px 0; }
-  .kot-qty { font-size: 16px; font-weight: 800; }
-  .item-note { font-size: 10px; color: #b45309; margin-top: 3px; }
+  @page { size: 58mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 10px; width: 50mm; margin: 0 auto; padding: 2px 2px; color: #000; text-transform: none; }
+  h1 { font-size: 11px; margin: 0 0 4px; font-weight: 800; }
+  .badge { display: inline-block; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; background: ${order.source === "website" ? "#1d4ed8" : "#15803d"}; }
+  .order-no { font-size: 24px; font-weight: 900; margin: 3px 0; }
+  .kot-item { border-bottom: 2px dashed #000; padding: 4px 0; }
+  .kot-qty { font-size: 14px; font-weight: 800; }
+  .item-note { font-size: 9px; color: #b45309; margin-top: 2px; }
 </style>
 <h1>KITCHEN ORDER TICKET</h1>
 <span class="badge">${order.source === "website" ? "ONLINE" : "POS"}</span>
