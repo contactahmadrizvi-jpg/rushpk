@@ -6,7 +6,8 @@ const PENDING_KEY = "rush_pos_pending_orders";
 const DAILY_KEY_PREFIX = "rush_pos_daily_";
 
 function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Use Pakistan Standard Time (UTC+5) so the counter resets at midnight PKT
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
 }
 
 export function bumpLocalDailyNumber(): number {
