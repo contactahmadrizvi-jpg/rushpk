@@ -338,7 +338,7 @@ export default function POSPage() {
       </header>
 
       {/* ── Main Split Layout ── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden" style={{ height: "calc(100vh - 172px)" }}>
 
         {/* ── LEFT: Menu Grid (60%) ── */}
         <main className="flex flex-col overflow-hidden" style={{ width: "60%" }}>
@@ -408,7 +408,7 @@ export default function POSPage() {
 
         {/* ── RIGHT: Cart Sidebar (40%) ── */}
         <aside
-          className="flex flex-col overflow-hidden bg-white border-l-2 border-stone-200 shadow-[-4px_0_20px_rgba(0,0,0,0.06)]"
+          className="flex flex-col h-full overflow-hidden bg-white border-l-2 border-stone-200 shadow-[-4px_0_20px_rgba(0,0,0,0.06)]"
           style={{ width: "40%", minWidth: "360px" }}
         >
           {cartStep === "cart" ? (
