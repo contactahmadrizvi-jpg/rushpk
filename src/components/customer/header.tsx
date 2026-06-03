@@ -26,6 +26,7 @@ export function CustomerHeader() {
   const { theme, setTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [trackedCount, setTrackedCount] = useState(0);
+  const [callModalOpen, setCallModalOpen] = useState(false);
 
   useEffect(() => {
     const update = () => setTrackedCount(getActiveTrackedOrders().length);
@@ -72,18 +73,12 @@ export function CustomerHeader() {
                 Track ({trackedCount})
               </Link>
             )}
-            <a 
-              href={`tel:${RESTAURANT.phone}`} 
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-2 shrink-0"
+            <button 
+              onClick={() => setCallModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-2 shrink-0"
             >
-              📞 {RESTAURANT.phone}
-            </a>
-            <a 
-              href={`tel:${RESTAURANT.phone2}`} 
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-1 shrink-0"
-            >
-              📞 {RESTAURANT.phone2}
-            </a>
+              📞 Call Us
+            </button>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -155,23 +150,48 @@ export function CustomerHeader() {
                 <Package className="h-4 w-4" />
                 Track order{trackedCount > 0 ? ` (${trackedCount})` : ""}
               </Link>
-              <div className="mt-4 px-2 space-y-2">
-                <a 
-                  href={`tel:${RESTAURANT.phone}`} 
-                  onClick={() => setMobileOpen(false)}
+              <div className="mt-4 px-2">
+                <button 
+                  onClick={() => { setMobileOpen(false); setCallModalOpen(true); }}
                   className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md hover:bg-primary/95 transition-all text-center w-full text-sm"
                 >
-                  📞 Call: {RESTAURANT.phone}
-                </a>
-                <a 
-                  href={`tel:${RESTAURANT.phone2}`} 
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md hover:bg-primary/95 transition-all text-center w-full text-sm"
-                >
-                  📞 Call: {RESTAURANT.phone2}
-                </a>
+                  📞 Call Us
+                </button>
               </div>
             </nav>
+          </div>
+        </div>
+      )}
+
+      {callModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setCallModalOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl border border-border/50 text-center animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary text-xl">
+              📞
+            </div>
+            <h3 className="text-lg font-bold">Contact Us</h3>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Call us on any of the numbers below to place your order or query.
+            </p>
+            <div className="mt-6 space-y-3">
+              <a
+                href={`tel:${RESTAURANT.phone}`}
+                className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary/10 transition-all"
+              >
+                <span>Primary Line</span>
+                <span className="font-mono">{RESTAURANT.phone}</span>
+              </a>
+              <a
+                href={`tel:${RESTAURANT.phone2}`}
+                className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-bold text-primary hover:bg-primary/10 transition-all"
+              >
+                <span>Secondary Line</span>
+                <span className="font-mono">{RESTAURANT.phone2}</span>
+              </a>
+            </div>
+            <Button variant="ghost" className="mt-6 w-full rounded-xl" onClick={() => setCallModalOpen(false)}>
+              Cancel
+            </Button>
           </div>
         </div>
       )}
