@@ -46,14 +46,14 @@ export default function HomePage() {
     return (
       <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-background">
         <motion.div
-          animate={{ 
+          animate={{
             y: [0, -20, 0],
             rotate: [0, 5, -5, 0]
           }}
-          transition={{ 
-            duration: 1.2, 
-            repeat: Infinity, 
-            ease: "easeInOut" 
+          transition={{
+            duration: 1.2,
+            repeat: Infinity,
+            ease: "easeInOut"
           }}
           className="text-7xl drop-shadow-xl"
         >
@@ -118,7 +118,7 @@ export default function HomePage() {
           {[
             { icon: Truck, title: "Fast Delivery", desc: "30-45 min in Sheikhupura" },
             { icon: Star, title: "Premium Quality", desc: "Fresh ingredients daily" },
-            { icon: Clock, title: "Open Daily", desc: "11 AM – 11 PM" },
+            { icon: Clock, title: "Open Daily", desc: "1 Pm – 10 PM" },
           ].map((f) => (
             <div key={f.title} className="flex gap-4 rounded-2xl border bg-card p-6 shadow-sm">
               <f.icon className="h-8 w-8 shrink-0 text-primary" />
@@ -143,7 +143,7 @@ export default function HomePage() {
                 View all deals
               </Link>
             </div>
-            
+
             <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {deals.map((d) => {
                 const dealItems = items.filter((i) => d.menuItemIds?.includes(i.id));
@@ -164,7 +164,7 @@ export default function HomePage() {
                         )}
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground font-semibold">{d.description}</p>
-                      
+
                       {dealItems.length > 0 && (
                         <div className="mt-4 space-y-1 bg-muted/40 p-2.5 rounded-xl border border-dashed">
                           <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Includes:</p>
@@ -179,7 +179,7 @@ export default function HomePage() {
                       )}
                     </div>
 
-                    <Button 
+                    <Button
                       onClick={() => {
                         if (dealItems.length === 0) {
                           toast.error("This deal has no items configured.");
@@ -237,9 +237,9 @@ export default function HomePage() {
             </div>
             <div className="mt-6 grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {catItems.map((item) => (
-                <FoodCard 
-                  key={item.id} 
-                  item={item} 
+                <FoodCard
+                  key={item.id}
+                  item={item}
                   onAdd={(variantId) => {
                     const custom: any = {};
                     if (variantId && item.variants) {
