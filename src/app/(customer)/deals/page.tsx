@@ -237,7 +237,7 @@ export default function DealsPage() {
                     }
                     dealItems.forEach((item) => {
                       const varId = d.selectedVariants?.[item.id];
-                      addItem(item, 1, varId ? { variant: varId } : {});
+                      addItem(item, 1, varId ? { variantId: varId } : {});
                     });
                     toast.success(`"${d.title}" added to cart!`, { duration: 2000 });
                   }}
