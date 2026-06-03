@@ -74,9 +74,15 @@ export function CustomerHeader() {
             )}
             <a 
               href={`tel:${RESTAURANT.phone}`} 
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-2 shrink-0"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-2 shrink-0"
             >
-              📞 Call: {RESTAURANT.phone}
+              📞 {RESTAURANT.phone}
+            </a>
+            <a 
+              href={`tel:${RESTAURANT.phone2}`} 
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-1 shrink-0"
+            >
+              📞 {RESTAURANT.phone2}
             </a>
           </nav>
 
@@ -149,13 +155,20 @@ export function CustomerHeader() {
                 <Package className="h-4 w-4" />
                 Track order{trackedCount > 0 ? ` (${trackedCount})` : ""}
               </Link>
-              <div className="mt-4 px-2">
+              <div className="mt-4 px-2 space-y-2">
                 <a 
                   href={`tel:${RESTAURANT.phone}`} 
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md hover:bg-primary/95 transition-all text-center w-full"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md hover:bg-primary/95 transition-all text-center w-full text-sm"
                 >
                   📞 Call: {RESTAURANT.phone}
+                </a>
+                <a 
+                  href={`tel:${RESTAURANT.phone2}`} 
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md hover:bg-primary/95 transition-all text-center w-full text-sm"
+                >
+                  📞 Call: {RESTAURANT.phone2}
                 </a>
               </div>
             </nav>

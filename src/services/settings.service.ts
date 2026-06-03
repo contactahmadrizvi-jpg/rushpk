@@ -45,8 +45,8 @@ export function getDefaultSettings(): RestaurantSettings {
     freeDeliveryAbove: 2000,
     openingHours: Array.from({ length: 7 }, (_, day) => ({
       day,
-      open: "11:00",
-      close: "23:00",
+      open: "13:00",
+      close: "22:00",
       isClosed: false,
     })),
     branches: [

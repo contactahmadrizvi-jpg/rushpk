@@ -22,7 +22,7 @@ export function CustomerFooter() {
         </div>
         <div className="space-y-3 text-sm text-muted-foreground">
           <p className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />{RESTAURANT.location}</p>
-          <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-primary" />{RESTAURANT.phone}</p>
+          <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-primary" />{RESTAURANT.phone} , {RESTAURANT.phone2}</p>
           <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" />{RESTAURANT.email}</p>
         </div>
       </div>

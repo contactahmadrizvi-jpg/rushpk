@@ -4,6 +4,7 @@ export const RESTAURANT = {
   name: "Rush Pizza and Burger",
   location: "Rush Pizza-Burger, Lahore Rd, opposite Usman CNG, near Makhan Sweets, Jameel Town, Sheikhupura, Pakistan",
   phone: "+92 304 6123876",
+  phone2: "0315-5116014",
   email: "orders@rushpizza.pk",
   defaultBranchId: "branch-sheikhupura",
 } as const;

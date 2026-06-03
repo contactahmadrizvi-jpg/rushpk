@@ -96,6 +96,8 @@ export interface MenuCategory {
   sortOrder: number;
   isActive: boolean;
   type: "pizza" | "burger" | "sides" | "drinks" | "deals" | "other";
+  hasSizes?: boolean;
+  hasPieces?: boolean;
 }
 
 export interface MenuVariant {

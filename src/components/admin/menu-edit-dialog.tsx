@@ -33,7 +33,17 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
     large: item.variants?.find((v) => v.id === "large")?.priceModifier
       ? String(item.price + item.variants.find((v) => v.id === "large")!.priceModifier)
       : "",
+    family: item.variants?.find((v) => v.id === "family")?.priceModifier
+      ? String(item.price + item.variants.find((v) => v.id === "family")!.priceModifier)
+      : "",
   });
+  const [manualVariants, setManualVariants] = useState<{ name: string; price: string }[]>(
+    item.variants
+      ? item.variants
+          .filter((v) => !["small", "medium", "large", "family"].includes(v.id))
+          .map((v) => ({ name: v.name, price: String(item.price + v.priceModifier) }))
+      : []
+  );
   const [form, setForm] = useState({
     name: item.name,
     price: String(item.price),
@@ -54,24 +64,66 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
       isPopular: item.isPopular,
     });
     setImageUrl(item.imageUrl);
+    setPizzaPrices({
+      medium: item.variants?.find((v) => v.id === "medium")?.priceModifier
+        ? String(item.price + item.variants.find((v) => v.id === "medium")!.priceModifier)
+        : "",
+      large: item.variants?.find((v) => v.id === "large")?.priceModifier
+        ? String(item.price + item.variants.find((v) => v.id === "large")!.priceModifier)
+        : "",
+      family: item.variants?.find((v) => v.id === "family")?.priceModifier
+        ? String(item.price + item.variants.find((v) => v.id === "family")!.priceModifier)
+        : "",
+    });
+    setManualVariants(
+      item.variants
+        ? item.variants
+            .filter((v) => !["small", "medium", "large", "family"].includes(v.id))
+            .map((v) => ({ name: v.name, price: String(item.price + v.priceModifier) }))
+        : []
+    );
     getRecipeByMenuItemId(item.id).then((r) => {
       if (r?.ingredients) setIngredients(r.ingredients);
       else setIngredients([]);
     });
   }, [open, item]);
 
+  const addManualVariantRow = () => {
+    setManualVariants([...manualVariants, { name: "", price: "" }]);
+  };
+  const removeManualVariantRow = (index: number) => {
+    setManualVariants(manualVariants.filter((_, i) => i !== index));
+  };
+  const updateManualVariantRow = (index: number, field: "name" | "price", value: string) => {
+    const updated = [...manualVariants];
+    if (updated[index]) {
+      updated[index][field] = value;
+      setManualVariants(updated);
+    }
+  };
+
   async function handleSave() {
     setSaving(true);
     try {
       const cat = categories.find((c) => c.id === form.categoryId);
-      let variants = item.variants;
-      if (cat?.type === "pizza") {
+      let variants = undefined;
+      if (cat?.type === "pizza" || cat?.hasSizes) {
         const basePrice = Number(form.price);
         variants = [
           { id: "small", name: "Small", priceModifier: 0 },
           { id: "medium", name: "Medium", priceModifier: Number(pizzaPrices.medium) - basePrice },
           { id: "large", name: "Large", priceModifier: Number(pizzaPrices.large) - basePrice },
+          { id: "family", name: "Family", priceModifier: Number(pizzaPrices.family) - basePrice },
         ];
+      } else if (cat?.hasPieces) {
+        const basePrice = Number(form.price);
+        variants = manualVariants
+          .filter((mv) => mv.name.trim() !== "")
+          .map((mv) => ({
+            id: slugify(mv.name) || Math.random().toString(36).substr(2, 9),
+            name: mv.name,
+            priceModifier: Number(mv.price) - basePrice,
+          }));
       }
 
       await itemsRepo.update(item.id, {
@@ -139,7 +191,7 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
             </select>
           </div>
 
-          {categories.find((c) => c.id === form.categoryId)?.type === "pizza" && (
+          {((categories.find((c) => c.id === form.categoryId)?.type === "pizza") || (categories.find((c) => c.id === form.categoryId)?.hasSizes)) && (
             <>
               <div>
                 <Label>Medium Price (PKR)</Label>
@@ -149,7 +201,43 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
                 <Label>Large Price (PKR)</Label>
                 <Input type="number" value={pizzaPrices.large} onChange={(e) => setPizzaPrices({ ...pizzaPrices, large: e.target.value })} placeholder="e.g. 1300" />
               </div>
+              <div>
+                <Label>Family Price (PKR)</Label>
+                <Input type="number" value={pizzaPrices.family} onChange={(e) => setPizzaPrices({ ...pizzaPrices, family: e.target.value })} placeholder="e.g. 1800" />
+              </div>
             </>
+          )}
+
+          {categories.find(c => c.id === form.categoryId)?.hasPieces && (
+            <div className="sm:col-span-2 border-t pt-4 mt-2">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="font-bold text-base">Custom Pieces / Variants</Label>
+                <Button size="sm" variant="outline" type="button" onClick={addManualVariantRow}>+ Add Variant</Button>
+              </div>
+              <div className="space-y-2">
+                {manualVariants.map((row, idx) => (
+                  <div key={idx} className="flex gap-3 items-center">
+                    <Input
+                      placeholder="e.g. 6 Pieces"
+                      value={row.name}
+                      onChange={(e) => updateManualVariantRow(idx, "name", e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Price (PKR)"
+                      value={row.price}
+                      onChange={(e) => updateManualVariantRow(idx, "price", e.target.value)}
+                      className="w-32"
+                    />
+                    <Button size="sm" variant="destructive" type="button" onClick={() => removeManualVariantRow(idx)}>Delete</Button>
+                  </div>
+                ))}
+                {manualVariants.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">No variants added yet. Click + Add Variant to create some.</p>
+                )}
+              </div>
+            </div>
           )}
 
           <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row">

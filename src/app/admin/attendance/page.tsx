@@ -331,7 +331,7 @@ export default function AttendancePage() {
                 ciUser!.displayName,
                 RESTAURANT_LAT,
                 RESTAURANT_LNG,
-                "11:00"
+                "13:00"
               );
               toast.success(`Attendance marked for ${ciUser!.displayName}`);
               await loadLogs();

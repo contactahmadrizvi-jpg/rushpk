@@ -25,11 +25,14 @@ export default function AdminMenuPage() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
   const [filterCat, setFilterCat] = useState("all");
   const [search, setSearch] = useState("");
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [form, setForm] = useState({ name: "", price: "", categoryId: "", description: "" });
-  const [pizzaPrices, setPizzaPrices] = useState({ medium: "", large: "" });
+  const [pizzaPrices, setPizzaPrices] = useState({ medium: "", large: "", family: "" });
+  const [manualVariants, setManualVariants] = useState<{ name: string; price: string }[]>([]);
+  const [catForm, setCatForm] = useState({ name: "", description: "", type: "other", hasSizes: false, hasPieces: false });
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
@@ -82,13 +85,23 @@ export default function AdminMenuPage() {
     
     const cat = categories.find((c) => c.id === form.categoryId);
     let variants = undefined;
-    if (cat?.type === "pizza") {
+    if (cat?.type === "pizza" || cat?.hasSizes) {
       const basePrice = Number(form.price);
       variants = [
         { id: "small", name: "Small", priceModifier: 0 },
         { id: "medium", name: "Medium", priceModifier: Number(pizzaPrices.medium) - basePrice },
         { id: "large", name: "Large", priceModifier: Number(pizzaPrices.large) - basePrice },
+        { id: "family", name: "Family", priceModifier: Number(pizzaPrices.family) - basePrice },
       ];
+    } else if (cat?.hasPieces) {
+      const basePrice = Number(form.price);
+      variants = manualVariants
+        .filter((mv) => mv.name.trim() !== "")
+        .map((mv) => ({
+          id: slugify(mv.name) || Math.random().toString(36).substr(2, 9),
+          name: mv.name,
+          priceModifier: Number(mv.price) - basePrice,
+        }));
     }
 
     const id = await itemsRepo.create({
@@ -113,12 +126,54 @@ export default function AdminMenuPage() {
 
     toast.success("Item added");
     setForm({ name: "", price: "", categoryId: "", description: "" });
-    setPizzaPrices({ medium: "", large: "" });
+    setPizzaPrices({ medium: "", large: "", family: "" });
+    setManualVariants([]);
     setImageUrl(undefined);
     setIngredients([]);
     setShowAdd(false);
     load();
   }
+
+  async function addCategory() {
+    if (!catForm.name) {
+      toast.error("Category name required");
+      return;
+    }
+    const slug = slugify(catForm.name);
+    const now = new Date().toISOString();
+    try {
+      await categoriesRepo.create({
+        name: catForm.name,
+        slug,
+        description: catForm.description || catForm.name,
+        isActive: true,
+        type: catForm.type as any,
+        hasSizes: catForm.hasSizes,
+        hasPieces: catForm.hasPieces,
+        sortOrder: categories.length + 1,
+      } as Omit<MenuCategory, "id">);
+      toast.success("Category added");
+      setCatForm({ name: "", description: "", type: "other", hasSizes: false, hasPieces: false });
+      setShowAddCategory(false);
+      load();
+    } catch (e) {
+      toast.error("Failed to add category");
+    }
+  }
+
+  const addManualVariantRow = () => {
+    setManualVariants([...manualVariants, { name: "", price: "" }]);
+  };
+  const removeManualVariantRow = (index: number) => {
+    setManualVariants(manualVariants.filter((_, i) => i !== index));
+  };
+  const updateManualVariantRow = (index: number, field: "name" | "price", value: string) => {
+    const updated = [...manualVariants];
+    if (updated[index]) {
+      updated[index][field] = value;
+      setManualVariants(updated);
+    }
+  };
 
   async function deleteItem(id: string) {
     try {
@@ -147,11 +202,73 @@ export default function AdminMenuPage() {
           <h1 className="text-2xl font-bold">Menu</h1>
           <p className="text-muted-foreground">{items.length} items · edit, images & recipes</p>
         </div>
-        <Button onClick={() => setShowAdd(!showAdd)}>
-          <Plus className="mr-2 h-4 w-4" />
-          {showAdd ? "Close" : "Add item"}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowAddCategory(!showAddCategory)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {showAddCategory ? "Close Category" : "Add Category"}
+          </Button>
+          <Button onClick={() => setShowAdd(!showAdd)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {showAdd ? "Close Item" : "Add Item"}
+          </Button>
+        </div>
       </div>
+
+      {showAddCategory && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add new category</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Category Name</Label>
+                <Input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} placeholder="e.g. Pasta" />
+              </div>
+              <div>
+                <Label>Type</Label>
+                <select
+                  className="mt-1 flex h-11 w-full rounded-xl border px-3 text-sm"
+                  value={catForm.type}
+                  onChange={(e) => setCatForm({ ...catForm, type: e.target.value })}
+                >
+                  <option value="other">Other</option>
+                  <option value="pizza">Pizza</option>
+                  <option value="burger">Burger</option>
+                  <option value="sides">Sides</option>
+                  <option value="drinks">Drinks</option>
+                  <option value="deals">Deals</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-4 py-2 sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-6">
+                  <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={catForm.hasSizes}
+                      onChange={(e) => setCatForm({ ...catForm, hasSizes: e.target.checked, hasPieces: e.target.checked ? false : catForm.hasPieces })}
+                    />
+                    Is it Size-based? (Small, Medium, Large, Family)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={catForm.hasPieces}
+                      onChange={(e) => setCatForm({ ...catForm, hasPieces: e.target.checked, hasSizes: e.target.checked ? false : catForm.hasSizes })}
+                    />
+                    Is it Pieces/Custom-based? (Allow custom variants)
+                  </label>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Description</Label>
+                <Textarea value={catForm.description} onChange={(e) => setCatForm({ ...catForm, description: e.target.value })} placeholder="e.g. Delicious freshly baked pasta" />
+              </div>
+            </div>
+            <Button onClick={addCategory}>Save Category</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {showAdd && (
         <Card>
@@ -184,7 +301,7 @@ export default function AdminMenuPage() {
                 </select>
               </div>
               
-              {categories.find(c => c.id === form.categoryId)?.type === "pizza" && (
+              {((categories.find(c => c.id === form.categoryId)?.type === "pizza") || (categories.find(c => c.id === form.categoryId)?.hasSizes)) && (
                 <>
                   <div>
                     <Label>Medium Price (PKR)</Label>
@@ -194,7 +311,43 @@ export default function AdminMenuPage() {
                     <Label>Large Price (PKR)</Label>
                     <Input type="number" value={pizzaPrices.large} onChange={(e) => setPizzaPrices({ ...pizzaPrices, large: e.target.value })} placeholder="e.g. 1300" />
                   </div>
+                  <div>
+                    <Label>Family Price (PKR)</Label>
+                    <Input type="number" value={pizzaPrices.family} onChange={(e) => setPizzaPrices({ ...pizzaPrices, family: e.target.value })} placeholder="e.g. 1800" />
+                  </div>
                 </>
+              )}
+
+              {categories.find(c => c.id === form.categoryId)?.hasPieces && (
+                <div className="sm:col-span-2 border-t pt-4 mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="font-bold text-base">Custom Pieces / Variants</Label>
+                    <Button size="sm" variant="outline" type="button" onClick={addManualVariantRow}>+ Add Variant</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {manualVariants.map((row, idx) => (
+                      <div key={idx} className="flex gap-3 items-center">
+                        <Input
+                          placeholder="e.g. 6 Pieces"
+                          value={row.name}
+                          onChange={(e) => updateManualVariantRow(idx, "name", e.target.value)}
+                          className="flex-1"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Price (PKR)"
+                          value={row.price}
+                          onChange={(e) => updateManualVariantRow(idx, "price", e.target.value)}
+                          className="w-32"
+                        />
+                        <Button size="sm" variant="destructive" type="button" onClick={() => removeManualVariantRow(idx)}>Delete</Button>
+                      </div>
+                    ))}
+                    {manualVariants.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">No variants added yet. Click + Add Variant to create some.</p>
+                    )}
+                  </div>
+                </div>
               )}
 
               <div className="sm:col-span-2">

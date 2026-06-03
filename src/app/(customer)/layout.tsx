@@ -38,8 +38,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         "Saturday",
         "Sunday"
       ],
-      "opens": "11:00",
-      "closes": "23:00"
+      "opens": "13:00",
+      "closes": "22:00"
     }
   };
 
