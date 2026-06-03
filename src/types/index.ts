@@ -307,6 +307,7 @@ export interface Deal {
   fixedPrice?: number;
   menuItemIds?: string[];
   selectedVariants?: Record<string, string>; // menuItemId -> variantId
+  itemPrices?: Record<string, number>; // menuItemId -> custom deal price for that item
   isActive: boolean;
   validFrom: string;
   validTo: string;
