@@ -27,6 +27,7 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
   const [imageUrl, setImageUrl] = useState(item.imageUrl);
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
   const [pizzaPrices, setPizzaPrices] = useState({
+    small: String(item.price),
     medium: item.variants?.find((v) => v.id === "medium")?.priceModifier
       ? String(item.price + item.variants.find((v) => v.id === "medium")!.priceModifier)
       : "",
@@ -65,6 +66,7 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
     });
     setImageUrl(item.imageUrl);
     setPizzaPrices({
+      small: String(item.price),
       medium: item.variants?.find((v) => v.id === "medium")?.priceModifier
         ? String(item.price + item.variants.find((v) => v.id === "medium")!.priceModifier)
         : "",
