@@ -30,7 +30,7 @@ export default function AdminMenuPage() {
   const [search, setSearch] = useState("");
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [form, setForm] = useState({ name: "", price: "", categoryId: "", description: "" });
-  const [pizzaPrices, setPizzaPrices] = useState({ medium: "", large: "", family: "" });
+  const [pizzaPrices, setPizzaPrices] = useState({ small: "", medium: "", large: "", family: "" });
   const [manualVariants, setManualVariants] = useState<{ name: string; price: string }[]>([]);
   const [catForm, setCatForm] = useState({ name: "", description: "", type: "other", hasSizes: false, hasPieces: false });
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
@@ -73,28 +73,52 @@ export default function AdminMenuPage() {
   }, [items, filterCat, search]);
 
   async function addItem() {
-    if (!form.name || !form.price || !form.categoryId) {
-      toast.error("Name, price and category required");
+    const cat = categories.find((c) => c.id === form.categoryId);
+    const isSizeBased = cat?.type === "pizza" || cat?.hasSizes;
+    const isPiecesBased = cat?.hasPieces;
+
+    if (!form.name || !form.categoryId) {
+      toast.error("Name and category required");
       return;
     }
+
+    let basePrice = 0;
+    if (isSizeBased) {
+      if (!pizzaPrices.small) {
+        toast.error("Small size price is required");
+        return;
+      }
+      basePrice = Number(pizzaPrices.small);
+    } else if (isPiecesBased) {
+      const activeVariants = manualVariants.filter((mv) => mv.name.trim() !== "" && mv.price.trim() !== "");
+      if (activeVariants.length === 0) {
+        toast.error("At least one variant with a price is required");
+        return;
+      }
+      basePrice = Number(activeVariants[0].price);
+    } else {
+      if (!form.price) {
+        toast.error("Price is required");
+        return;
+      }
+      basePrice = Number(form.price);
+    }
+
     if (!imageUrl?.trim()) {
       toast.error("Upload a product image first (ImgBB → Firestore)");
       return;
     }
     const now = new Date().toISOString();
     
-    const cat = categories.find((c) => c.id === form.categoryId);
     let variants = undefined;
-    if (cat?.type === "pizza" || cat?.hasSizes) {
-      const basePrice = Number(form.price);
+    if (isSizeBased) {
       variants = [
         { id: "small", name: "Small", priceModifier: 0 },
         { id: "medium", name: "Medium", priceModifier: Number(pizzaPrices.medium) - basePrice },
         { id: "large", name: "Large", priceModifier: Number(pizzaPrices.large) - basePrice },
         { id: "family", name: "Family", priceModifier: Number(pizzaPrices.family) - basePrice },
       ];
-    } else if (cat?.hasPieces) {
-      const basePrice = Number(form.price);
+    } else if (isPiecesBased) {
       variants = manualVariants
         .filter((mv) => mv.name.trim() !== "")
         .map((mv) => ({
@@ -109,7 +133,7 @@ export default function AdminMenuPage() {
       name: form.name,
       slug: slugify(form.name),
       description: form.description || form.name,
-      price: Number(form.price),
+      price: basePrice,
       imageUrl: imageUrl.trim(),
       isAvailable: true,
       isPopular: false,
@@ -126,7 +150,7 @@ export default function AdminMenuPage() {
 
     toast.success("Item added");
     setForm({ name: "", price: "", categoryId: "", description: "" });
-    setPizzaPrices({ medium: "", large: "", family: "" });
+    setPizzaPrices({ small: "", medium: "", large: "", family: "" });
     setManualVariants([]);
     setImageUrl(undefined);
     setIngredients([]);
@@ -281,10 +305,12 @@ export default function AdminMenuPage() {
                 <Label>Name</Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
-              <div>
-                <Label>Price (PKR)</Label>
-                <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-              </div>
+              {!((categories.find(c => c.id === form.categoryId)?.type === "pizza") || (categories.find(c => c.id === form.categoryId)?.hasSizes) || (categories.find(c => c.id === form.categoryId)?.hasPieces)) && (
+                <div>
+                  <Label>Price (PKR)</Label>
+                  <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                </div>
+              )}
               <div>
                 <Label>Category</Label>
                 <select
@@ -303,6 +329,10 @@ export default function AdminMenuPage() {
               
               {((categories.find(c => c.id === form.categoryId)?.type === "pizza") || (categories.find(c => c.id === form.categoryId)?.hasSizes)) && (
                 <>
+                  <div>
+                    <Label>Small Price (PKR)</Label>
+                    <Input type="number" value={pizzaPrices.small} onChange={(e) => setPizzaPrices({ ...pizzaPrices, small: e.target.value })} placeholder="e.g. 600" />
+                  </div>
                   <div>
                     <Label>Medium Price (PKR)</Label>
                     <Input type="number" value={pizzaPrices.medium} onChange={(e) => setPizzaPrices({ ...pizzaPrices, medium: e.target.value })} placeholder="e.g. 900" />
