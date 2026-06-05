@@ -94,8 +94,12 @@ export function getPendingPosOrders(): PendingPosOrder[] {
   return readPending();
 }
 
+const KITCHEN_DONE = new Set(["served", "delivered", "cancelled"]);
+
 export function getPendingKitchenOrders(): Order[] {
-  return readPending().map((p) => p.order);
+  return readPending()
+    .map((p) => p.order)
+    .filter((o) => !KITCHEN_DONE.has(o.status) && !KITCHEN_DONE.has(o.kitchenStatus ?? ""));
 }
 
 export function removePendingByLocalId(localId: string) {
@@ -119,14 +123,16 @@ export function updatePendingOrderStatus(
       if (paymentMethod) {
         p.order.paymentMethod = paymentMethod;
         p.input.paymentMethod = paymentMethod;
-        p.order.paymentStatus = "paid";
+        // Correctly set paymentStatus — credit sale is NOT "paid"
+        p.order.paymentStatus = paymentMethod === "credit" ? "credit" : "paid";
+        p.input.paymentStatus = p.order.paymentStatus;
       }
       updated = true;
     }
   }
   if (updated) {
     writePending(list);
-    window.dispatchEvent(new Event("rush-pos-pending"));
+    window.dispatchEvent(new CustomEvent("rush-pos-pending"));
   }
 }
 
