@@ -21,11 +21,27 @@ interface Props {
   onSaved: () => void;
 }
 
+const PIZZA_SIZES = [
+  { key: "small", label: "Small" },
+  { key: "medium", label: "Medium" },
+  { key: "large", label: "Large" },
+  { key: "family", label: "Family" },
+] as const;
+
+type PizzaSize = (typeof PIZZA_SIZES)[number]["key"];
+
 export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imageUrl, setImageUrl] = useState(item.imageUrl);
+
+  // Per-size ingredients for pizza items
+  const [sizeIngredients, setSizeIngredients] = useState<Record<PizzaSize, DraftIngredient[]>>({
+    small: [], medium: [], large: [], family: [],
+  });
+  // Base ingredients for non-pizza items
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
+
   const [pizzaPrices, setPizzaPrices] = useState({
     small: String(item.price),
     medium: item.variants?.find((v) => v.id === "medium")?.priceModifier
@@ -53,6 +69,9 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
     isAvailable: item.isAvailable,
     isPopular: item.isPopular,
   });
+
+  const currentCat = categories.find((c) => c.id === form.categoryId);
+  const isSizeBased = currentCat?.type === "pizza" || currentCat?.hasSizes;
 
   useEffect(() => {
     if (!open) return;
@@ -84,11 +103,30 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
             .map((v) => ({ name: v.name, price: String(item.price + v.priceModifier) }))
         : []
     );
-    getRecipeByMenuItemId(item.id).then((r) => {
-      if (r?.ingredients) setIngredients(r.ingredients);
-      else setIngredients([]);
-    });
-  }, [open, item]);
+
+    const cat = categories.find((c) => c.id === item.categoryId);
+    const isPizza = cat?.type === "pizza" || cat?.hasSizes;
+
+    if (isPizza) {
+      // Load per-size recipes
+      const loadSizeRecipes = async () => {
+        const newSizeIngredients: Record<PizzaSize, DraftIngredient[]> = {
+          small: [], medium: [], large: [], family: [],
+        };
+        for (const { key } of PIZZA_SIZES) {
+          const r = await getRecipeByMenuItemId(`${item.id}_${key}`);
+          if (r?.ingredients) newSizeIngredients[key] = r.ingredients;
+        }
+        setSizeIngredients(newSizeIngredients);
+      };
+      loadSizeRecipes();
+    } else {
+      getRecipeByMenuItemId(item.id).then((r) => {
+        if (r?.ingredients) setIngredients(r.ingredients);
+        else setIngredients([]);
+      });
+    }
+  }, [open, item, categories]);
 
   const addManualVariantRow = () => {
     setManualVariants([...manualVariants, { name: "", price: "" }]);
@@ -108,13 +146,13 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
     setSaving(true);
     try {
       const cat = categories.find((c) => c.id === form.categoryId);
-      const isSizeBased = cat?.type === "pizza" || cat?.hasSizes;
+      const isPizzaCat = cat?.type === "pizza" || cat?.hasSizes;
       const isPiecesBased = cat?.hasPieces;
 
       let basePrice = 0;
       let variants = undefined;
 
-      if (isSizeBased) {
+      if (isPizzaCat) {
         if (!pizzaPrices.small) {
           toast.error("Small size price is required");
           setSaving(false);
@@ -163,7 +201,15 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
         variants,
       } as Partial<MenuItem>);
 
-      if (ingredients.length) {
+      if (isPizzaCat) {
+        // Save per-size ingredients
+        for (const { key, label } of PIZZA_SIZES) {
+          const sizeIngs = sizeIngredients[key];
+          if (sizeIngs.length > 0) {
+            await saveRecipeForMenuItem(`${item.id}_${key}`, `${form.name} (${label})`, sizeIngs);
+          }
+        }
+      } else if (ingredients.length) {
         await saveRecipeForMenuItem(item.id, form.name, ingredients);
       }
 
@@ -299,8 +345,25 @@ export function MenuEditDialog({ item, categories, inventory, onSaved }: Props) 
           <ImageUpload value={imageUrl} onChange={setImageUrl} />
         </div>
 
+        {/* ── Recipe / Ingredients ── */}
         <div className="mt-4">
-          <RecipeIngredientPicker inventory={inventory} value={ingredients} onChange={setIngredients} />
+          {isSizeBased ? (
+            <div className="space-y-4">
+              <p className="text-sm font-bold text-foreground">Ingredients per size (optional)</p>
+              {PIZZA_SIZES.map(({ key, label }) => (
+                <div key={key}>
+                  <p className="mb-1.5 text-xs font-black uppercase tracking-wider text-primary">{label} Size</p>
+                  <RecipeIngredientPicker
+                    inventory={inventory}
+                    value={sizeIngredients[key]}
+                    onChange={(val) => setSizeIngredients((prev) => ({ ...prev, [key]: val }))}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <RecipeIngredientPicker inventory={inventory} value={ingredients} onChange={setIngredients} />
+          )}
         </div>
 
         <div className="mt-6 flex gap-2">

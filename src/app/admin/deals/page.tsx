@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  Trash2, Edit2, Loader2, Calendar, Check,
+  Trash2, Edit2, Loader2, Check,
   BadgePercent, Sparkles, X,
   ShoppingBag, ToggleLeft, ToggleRight, Search
 } from "lucide-react";
@@ -38,11 +38,6 @@ export default function AdminDealsPage() {
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
-  const [validFrom, setValidFrom] = useState(() => new Date().toISOString().split("T")[0]!);
-  const [validTo, setValidTo] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() + 1);
-    return d.toISOString().split("T")[0]!;
-  });
   const [isActive, setIsActive] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -98,9 +93,6 @@ export default function AdminDealsPage() {
     setEditingId(null); setTitle(""); setDescription("");
     setDiscountPercent(""); setSelectedItemIds([]);
     setSelectedVariants({}); setItemPrices({});
-    setValidFrom(new Date().toISOString().split("T")[0]!);
-    const d = new Date(); d.setMonth(d.getMonth() + 1);
-    setValidTo(d.toISOString().split("T")[0]!);
     setIsActive(true); setSearchQuery("");
   };
 
@@ -112,8 +104,6 @@ export default function AdminDealsPage() {
     const ps: Record<string, string> = {};
     if (deal.itemPrices) Object.entries(deal.itemPrices).forEach(([k, v]) => { ps[k] = String(v); });
     setItemPrices(ps);
-    setValidFrom(deal.validFrom.split("T")[0]!);
-    setValidTo(deal.validTo.split("T")[0]!);
     setIsActive(deal.isActive);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -126,14 +116,15 @@ export default function AdminDealsPage() {
     try {
       const numericPrices: Record<string, number> = {};
       Object.entries(itemPrices).forEach(([k, v]) => { if (v && !isNaN(Number(v))) numericPrices[k] = Number(v); });
+      // Use far-future dates so deals never expire
       const payload: Omit<Deal, "id"> = {
         title, description,
         discountPercent: discountPercent ? Number(discountPercent) : undefined,
         fixedPrice: discountedTotal > 0 ? discountedTotal : undefined,
         menuItemIds: selectedItemIds, selectedVariants,
         itemPrices: Object.keys(numericPrices).length ? numericPrices : undefined,
-        validFrom: new Date(validFrom).toISOString(),
-        validTo: new Date(validTo + "T23:59:59.999Z").toISOString(),
+        validFrom: "2000-01-01T00:00:00.000Z",
+        validTo: "2100-12-31T23:59:59.999Z",
         isActive,
       };
       if (editingId) { await dealsRepo.update(editingId, payload); toast.success("Deal updated!"); }
@@ -215,29 +206,18 @@ export default function AdminDealsPage() {
               </CardContent>
             </Card>
 
-            {/* Schedule + Publish */}
+            {/* Publish Settings */}
             <Card className="border-2 border-border">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <StepBadge n={3} active={step1Done && step2Done} done={false} />
                   <div>
-                    <CardTitle className="text-base">Schedule &amp; Publish</CardTitle>
-                    <CardDescription className="text-xs">Set validity dates and go live</CardDescription>
+                    <CardTitle className="text-base">Publish Settings</CardTitle>
+                    <CardDescription className="text-xs">Toggle deal visibility for customers</CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">From</Label>
-                    <Input type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} className="mt-1" required />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Until</Label>
-                    <Input type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} className="mt-1" required />
-                  </div>
-                </div>
-
                 <button type="button" onClick={() => setIsActive((v) => !v)}
                   className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 transition-all font-semibold text-sm
                     ${isActive ? "border-primary bg-primary/5 text-primary" : "border-border bg-muted/30 text-muted-foreground"}`}>
@@ -510,11 +490,7 @@ export default function AdminDealsPage() {
                       </div>
                     )}
 
-                    <div className="mt-3 flex items-center justify-between border-t pt-3">
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(deal.validFrom).toLocaleDateString()} → {new Date(deal.validTo).toLocaleDateString()}
-                      </p>
+                    <div className="mt-3 flex items-center justify-end border-t pt-3">
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => handleEdit(deal)} className="h-7 text-xs gap-1">
                           <Edit2 className="h-3 w-3" /> Edit

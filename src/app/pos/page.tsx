@@ -17,11 +17,12 @@ import {
   Plus,
   Sparkles,
   MapPin,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePOSStore } from "@/stores/pos-store";
-import { subscribeMenuItems, getActiveCategories } from "@/services/menu.service";
+import { subscribeMenuItems, getActiveCategories, getActiveDeals } from "@/services/menu.service";
 import type { CreateOrderInput } from "@/services/orders.service";
 import { subscribeKitchenOrders } from "@/services/orders.service";
 import { preloadPrintHeader, printKOT } from "@/lib/print";
@@ -29,7 +30,7 @@ import { buildInstantPosOrder } from "@/lib/pos-instant";
 import { startPosSyncWorker } from "@/services/pos-sync.service";
 import { formatCurrency, cn } from "@/lib/utils";
 import { getFirestoreDb } from "@/lib/firebase/config";
-import type { MenuItem, OrderItem, OrderType, MenuCategory } from "@/types";
+import type { Deal, MenuItem, OrderItem, OrderType, MenuCategory } from "@/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { userHasPermission } from "@/lib/permissions";
 import { RESTAURANT } from "@/constants";
@@ -52,12 +53,15 @@ const ORDER_TYPES: { id: OrderType; label: string; icon: string }[] = [
   { id: "delivery", label: "Delivery", icon: "🛵" },
 ];
 
+const DEALS_CATEGORY_ID = "__deals__";
+
 export default function POSPage() {
   const router = useRouter();
   const profile = useAuthStore((s) => s.profile);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [paying, setPaying] = useState(false);
@@ -86,6 +90,7 @@ export default function POSPage() {
     setOrderType,
     setTableNumber,
     addItem,
+    addDeal,
     removeItem,
     updateQty,
     clearOrder,
@@ -101,6 +106,7 @@ export default function POSPage() {
     preloadPrintHeader();
     const stopSync = startPosSyncWorker();
     getActiveCategories().then(setCategories);
+    getActiveDeals().then(setDeals);
     const unsub = subscribeMenuItems((items) => {
       setMenu(items);
       setMenuLoading(false);
@@ -129,7 +135,10 @@ export default function POSPage() {
       .map((o) => o.tableNumber as number);
   }, [activeOrders]);
 
+  const isDealsTab = activeCategory === DEALS_CATEGORY_ID;
+
   const filtered = useMemo(() => {
+    if (isDealsTab) return [];
     let list = menu;
     if (activeCategory !== "all") {
       list = list.filter((m) => m.categoryId === activeCategory);
@@ -139,7 +148,14 @@ export default function POSPage() {
       list = list.filter((m) => m.name.toLowerCase().includes(q));
     }
     return list;
-  }, [menu, activeCategory, search]);
+  }, [menu, activeCategory, search, isDealsTab]);
+
+  const filteredDeals = useMemo(() => {
+    if (!isDealsTab) return [];
+    if (!search.trim()) return deals;
+    const q = search.toLowerCase();
+    return deals.filter((d) => d.title.toLowerCase().includes(q) || d.description.toLowerCase().includes(q));
+  }, [deals, isDealsTab, search]);
 
   const selectSuggestion = (s: any) => {
     setCustomer(s.name, s.phone);
@@ -228,7 +244,6 @@ export default function POSPage() {
       const { order } = buildInstantPosOrder(inputData);
       const num = order.dailyOrderNumber ?? order.orderNumber;
 
-      // ── Confirm FIRST — cancel means NO print and NO kitchen send ──
       const confirmed = window.confirm(
         `Send Order #${num} to Kitchen?\n\nClick OK to print KOT & send to kitchen.\nClick Cancel to discard this order.`
       );
@@ -241,7 +256,6 @@ export default function POSPage() {
         return;
       }
 
-      // User confirmed — print now
       await printKOT(order);
       if (orderType === "delivery") {
         try {
@@ -291,6 +305,21 @@ export default function POSPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [placeOrder, cartStep, items.length]);
 
+  // Compute deal total price for display
+  const getDealTotal = (deal: Deal) => {
+    const dealItems = menu.filter((m) => deal.menuItemIds?.includes(m.id));
+    const rawTotal = dealItems.reduce((sum, item) => {
+      const custom = deal.itemPrices?.[item.id];
+      if (custom !== undefined) return sum + custom;
+      const varId = deal.selectedVariants?.[item.id];
+      const mod = varId ? (item.variants?.find((v) => v.id === varId)?.priceModifier ?? 0) : 0;
+      return sum + item.price + mod;
+    }, 0);
+    return deal.discountPercent
+      ? Math.round(rawTotal * (1 - deal.discountPercent / 100))
+      : (deal.fixedPrice ?? rawTotal);
+  };
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#f8f4ef]">
 
@@ -320,12 +349,28 @@ export default function POSPage() {
           ))}
         </div>
 
-        {/* Categories */}
+        {/* Categories + Deals tab */}
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button type="button" onClick={() => { setActiveCategory("all"); setSearch(""); }}
             className={cn("shrink-0 rounded-full px-4 py-2 text-sm font-bold transition",
               activeCategory === "all" ? "bg-stone-900 text-white" : "bg-white text-stone-600 ring-1 ring-stone-200"
             )}>All</button>
+
+          {/* Deals tab — shown first, highlighted */}
+          {deals.length > 0 && (
+            <button type="button" onClick={() => { setActiveCategory(DEALS_CATEGORY_ID); setSearch(""); }}
+              className={cn("shrink-0 rounded-full px-4 py-2 text-sm font-bold transition flex items-center gap-1.5",
+                activeCategory === DEALS_CATEGORY_ID
+                  ? "bg-amber-500 text-white shadow-md shadow-amber-500/30"
+                  : "bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100"
+              )}>
+              <Tag className="h-3.5 w-3.5" /> Deals
+              <span className={cn("flex h-4 min-w-4 items-center justify-center rounded-full text-[9px] font-black px-1",
+                activeCategory === DEALS_CATEGORY_ID ? "bg-white/30 text-white" : "bg-amber-200 text-amber-800"
+              )}>{deals.length}</span>
+            </button>
+          )}
+
           {categories.map((cat) => (
             <button key={cat.id} type="button" onClick={() => { setActiveCategory(cat.id); setSearch(""); }}
               className={cn("shrink-0 rounded-full px-4 py-2 text-sm font-bold transition",
@@ -348,62 +393,128 @@ export default function POSPage() {
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400" />
               <Input
                 className="h-12 rounded-2xl border-0 bg-white pl-12 text-base shadow-sm ring-1 ring-stone-200/80"
-                placeholder="Search menu..."
+                placeholder={isDealsTab ? "Search deals..." : "Search menu..."}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Grid */}
-          <div className="grid grid-cols-2 gap-3 overflow-y-auto px-3 pb-4 sm:grid-cols-3 sm:px-4 lg:grid-cols-4">
-            {menuLoading ? (
-              <div className="col-span-full p-2"><FoodGridSkeleton count={8} /></div>
-            ) : filtered.map((item) => (
-              <div key={item.id}
-                className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/40"
-                style={{ height: "220px" }}
-              >
-                <button
-                  type="button"
-                  className="relative flex-1 w-full overflow-hidden bg-stone-100 active:scale-[0.98] transition"
-                  onClick={() => {
-                    const custom = item.variants?.length ? { variantId: item.variants[0].id, variantName: item.variants[0].name } : {};
-                    addItem(item, 1, custom);
-                  }}
-                >
-                  <MenuItemImage src={item.imageUrl} alt={item.name} fill />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                  <span className="absolute bottom-2 left-2 right-2 truncate text-sm font-black text-white drop-shadow">{item.name}</span>
-                  <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow opacity-0 transition group-hover:opacity-100 active:scale-90">
-                    <Plus className="h-3.5 w-3.5" />
-                  </span>
-                </button>
-                {item.variants && item.variants.length > 0 ? (
-                  <div className="flex shrink-0 items-center gap-1 bg-stone-50 p-1.5" style={{ height: "52px" }}>
-                    {item.variants.map((v) => (
-                      <button key={v.id} type="button"
-                        onClick={() => addItem(item, 1, { variantId: v.id, variantName: v.name })}
-                        className="flex-1 rounded-lg bg-white py-1.5 text-xs font-black text-stone-700 ring-1 ring-stone-200 hover:bg-primary hover:text-white hover:ring-primary active:scale-95 transition"
-                      >{v.name}</button>
-                    ))}
+          {/* Deals Grid */}
+          {isDealsTab ? (
+            <div className="grid grid-cols-1 gap-3 overflow-y-auto px-3 pb-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredDeals.map((deal) => {
+                const dealTotal = getDealTotal(deal);
+                const dealItems = menu.filter((m) => deal.menuItemIds?.includes(m.id));
+                return (
+                  <div key={deal.id}
+                    className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200/60 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-amber-400/50">
+                    {/* Deal header */}
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-white/80" />
+                          <span className="text-sm font-black text-white truncate">{deal.title}</span>
+                        </div>
+                        {deal.discountPercent && (
+                          <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black text-white">
+                            {deal.discountPercent}% OFF
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-white/80 line-clamp-1">{deal.description}</p>
+                    </div>
+
+                    {/* Items preview */}
+                    {dealItems.length > 0 && (
+                      <div className="flex gap-1.5 overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {dealItems.map((item) => (
+                          <div key={item.id} className="flex-shrink-0 flex flex-col items-center">
+                            <div className="h-10 w-10 overflow-hidden rounded-lg bg-stone-100">
+                              {item.imageUrl
+                                ? <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                                : <div className="flex h-full w-full items-center justify-center text-lg">🍔</div>}
+                            </div>
+                            <span className="mt-0.5 max-w-[44px] truncate text-[8px] text-stone-500 text-center">{item.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add button with TOTAL price */}
+                    <button type="button"
+                      className="mt-auto flex items-center justify-between bg-amber-50 px-4 py-3 hover:bg-amber-100 active:bg-amber-200 transition border-t border-amber-100"
+                      onClick={() => {
+                        addDeal(deal, menu);
+                        toast.success(`"${deal.title}" added to cart`);
+                      }}
+                    >
+                      <div className="flex flex-col items-start">
+                        <span className="text-base font-black text-amber-700">{formatCurrency(dealTotal)}</span>
+                        <span className="text-[10px] text-amber-500 font-semibold">Total deal price</span>
+                      </div>
+                      <span className="flex items-center gap-1 rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-black text-white shadow-sm hover:bg-amber-600 active:scale-95 transition">
+                        <Plus className="h-3.5 w-3.5" /> Add Deal
+                      </span>
+                    </button>
                   </div>
-                ) : (
-                  <button type="button"
-                    className="flex shrink-0 items-center justify-between bg-white px-3 py-2 hover:bg-orange-50 active:bg-stone-50 transition"
-                    style={{ height: "52px" }}
-                    onClick={() => addItem(item)}
+                );
+              })}
+              {filteredDeals.length === 0 && (
+                <p className="col-span-full py-16 text-center text-stone-400">No deals found</p>
+              )}
+            </div>
+          ) : (
+            /* Regular Menu Grid */
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-3 pb-4 sm:grid-cols-3 sm:px-4 lg:grid-cols-4">
+              {menuLoading ? (
+                <div className="col-span-full p-2"><FoodGridSkeleton count={8} /></div>
+              ) : filtered.map((item) => (
+                <div key={item.id}
+                  className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-stone-200/60 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-primary/40"
+                  style={{ height: "220px" }}
+                >
+                  <button
+                    type="button"
+                    className="relative flex-1 w-full overflow-hidden bg-stone-100 active:scale-[0.98] transition"
+                    onClick={() => {
+                      const custom = item.variants?.length ? { variantId: item.variants[0].id, variantName: item.variants[0].name } : {};
+                      addItem(item, 1, custom);
+                    }}
                   >
-                    <span className="text-sm font-black text-primary">{formatCurrency(item.price)}</span>
-                    <span className="rounded-lg bg-orange-50 border border-orange-100 px-2 py-0.5 text-xs font-black text-orange-700">+ Add</span>
+                    <MenuItemImage src={item.imageUrl} alt={item.name} fill />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    <span className="absolute bottom-2 left-2 right-2 truncate text-sm font-black text-white drop-shadow">{item.name}</span>
+                    <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow opacity-0 transition group-hover:opacity-100 active:scale-90">
+                      <Plus className="h-3.5 w-3.5" />
+                    </span>
                   </button>
-                )}
-              </div>
-            ))}
-            {!menuLoading && !filtered.length && (
-              <p className="col-span-full py-16 text-center text-stone-400">No items found</p>
-            )}
-          </div>
+                  {item.variants && item.variants.length > 0 ? (
+                    <div className="flex shrink-0 items-center gap-1 bg-stone-50 p-1.5" style={{ height: "52px" }}>
+                      {item.variants.map((v) => (
+                        <button key={v.id} type="button"
+                          onClick={() => addItem(item, 1, { variantId: v.id, variantName: v.name })}
+                          className="flex-1 rounded-lg bg-white py-1.5 text-xs font-black text-stone-700 ring-1 ring-stone-200 hover:bg-primary hover:text-white hover:ring-primary active:scale-95 transition"
+                        >{v.name}</button>
+                      ))}
+                    </div>
+                  ) : (
+                    <button type="button"
+                      className="flex shrink-0 items-center justify-between bg-white px-3 py-2 hover:bg-orange-50 active:bg-stone-50 transition"
+                      style={{ height: "52px" }}
+                      onClick={() => addItem(item)}
+                    >
+                      <span className="text-sm font-black text-primary">{formatCurrency(item.price)}</span>
+                      <span className="rounded-lg bg-orange-50 border border-orange-100 px-2 py-0.5 text-xs font-black text-orange-700">+ Add</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!menuLoading && !filtered.length && (
+                <p className="col-span-full py-16 text-center text-stone-400">No items found</p>
+              )}
+            </div>
+          )}
         </main>
 
         {/* ── RIGHT: Cart Sidebar (40%) ── */}
@@ -448,23 +559,31 @@ export default function POSPage() {
                         {/* Item row */}
                         <div className="flex items-center gap-3">
                           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-stone-100 bg-stone-50">
-                            <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />
+                            {line.isDeal
+                              ? <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-100 to-orange-100 text-2xl">🎁</div>
+                              : <MenuItemImage src={line.menuItem.imageUrl} alt="" fill />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-black text-stone-900 leading-tight">
                               {line.menuItem.name}
-                              {line.customization?.variantName && (
+                              {line.isDeal && (
+                                <span className="ml-1 text-[10px] font-black text-amber-600 bg-amber-50 rounded px-1 border border-amber-200">DEAL</span>
+                              )}
+                              {!line.isDeal && line.customization?.variantName && (
                                 <span className="ml-1 text-[10px] font-semibold text-stone-400 bg-stone-100 rounded px-1">
                                   {line.customization.variantName}
                                 </span>
                               )}
                             </p>
                             <div className="mt-1 flex items-center gap-2">
+                              {/* For deals, always show total; for items, show subtotal */}
                               <span className="text-base font-black text-primary">{formatCurrency(line.subtotal)}</span>
-                              {line.discountAmount ? (
+                              {!line.isDeal && line.discountAmount ? (
                                 <span className="text-xs font-bold text-stone-400 line-through">{formatCurrency(line.unitPrice * line.quantity)}</span>
-                              ) : (
+                              ) : !line.isDeal ? (
                                 <span className="text-xs text-stone-400">{formatCurrency(line.unitPrice)} ea</span>
+                              ) : (
+                                <span className="text-xs text-amber-500 font-semibold">deal price</span>
                               )}
                             </div>
                           </div>
@@ -490,37 +609,39 @@ export default function POSPage() {
                           </button>
                         </div>
 
-                        {/* Per-item Discount */}
-                        <div className="mt-2 flex items-center justify-between gap-2 pl-[76px]">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Disc</span>
-                          <div className="flex items-center gap-1">
-                            {/* Type toggle */}
-                            <div className="flex rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
-                              <button type="button"
-                                onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "percent", line.discountValue ?? 0); }}
-                                className={cn("px-2.5 py-1 text-[10px] font-black transition-all",
-                                  line.discountType === "percent" ? "bg-primary text-white" : "text-stone-400 hover:text-stone-600"
-                                )}>%</button>
-                              <button type="button"
-                                onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "cash", line.discountValue ?? 0); }}
-                                className={cn("px-2.5 py-1 text-[10px] font-black transition-all",
-                                  line.discountType === "cash" ? "bg-primary text-white" : "text-stone-400 hover:text-stone-600"
-                                )}>Rs</button>
+                        {/* Per-item Discount — only for non-deal items */}
+                        {!line.isDeal && (
+                          <div className="mt-2 flex items-center justify-between gap-2 pl-[76px]">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Disc</span>
+                            <div className="flex items-center gap-1">
+                              {/* Type toggle */}
+                              <div className="flex rounded-lg overflow-hidden border border-stone-200 bg-stone-50">
+                                <button type="button"
+                                  onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "percent", line.discountValue ?? 0); }}
+                                  className={cn("px-2.5 py-1 text-[10px] font-black transition-all",
+                                    line.discountType === "percent" ? "bg-primary text-white" : "text-stone-400 hover:text-stone-600"
+                                  )}>%</button>
+                                <button type="button"
+                                  onClick={() => { const { updateLineDiscount } = usePOSStore.getState(); updateLineDiscount(line.id, "cash", line.discountValue ?? 0); }}
+                                  className={cn("px-2.5 py-1 text-[10px] font-black transition-all",
+                                    line.discountType === "cash" ? "bg-primary text-white" : "text-stone-400 hover:text-stone-600"
+                                  )}>Rs</button>
+                              </div>
+                              {/* Value input */}
+                              <input
+                                type="number" min="0" value={line.discountValue || ""} placeholder="0"
+                                onChange={(e) => {
+                                  const { updateLineDiscount } = usePOSStore.getState();
+                                  let val = parseInt(e.target.value) || 0;
+                                  if (line.discountType === "percent") val = Math.min(100, Math.max(0, val));
+                                  else val = Math.min(line.unitPrice, Math.max(0, val));
+                                  updateLineDiscount(line.id, line.discountType || "percent", val);
+                                }}
+                                className="w-16 h-7 text-right px-2 font-bold rounded-lg border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                              />
                             </div>
-                            {/* Value input */}
-                            <input
-                              type="number" min="0" value={line.discountValue || ""} placeholder="0"
-                              onChange={(e) => {
-                                const { updateLineDiscount } = usePOSStore.getState();
-                                let val = parseInt(e.target.value) || 0;
-                                if (line.discountType === "percent") val = Math.min(100, Math.max(0, val));
-                                else val = Math.min(line.unitPrice, Math.max(0, val));
-                                updateLineDiscount(line.id, line.discountType || "percent", val);
-                              }}
-                              className="w-16 h-7 text-right px-2 font-bold rounded-lg border border-stone-200 bg-white text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                            />
                           </div>
-                        </div>
+                        )}
                       </li>
                     ))}
                   </ul>

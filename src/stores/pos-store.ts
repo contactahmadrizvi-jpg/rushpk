@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CartItemCustomization, MenuItem, OrderType, Table } from "@/types";
+import type { CartItemCustomization, Deal, MenuItem, OrderType, Table } from "@/types";
 
 export interface POSLine {
   id: string;
@@ -12,6 +12,8 @@ export interface POSLine {
   discountValue?: number;
   discountAmount?: number;
   notes?: string;
+  isDeal?: boolean;
+  dealTitle?: string;
 }
 
 interface POSState {
@@ -28,6 +30,7 @@ interface POSState {
   setTableNumber: (n?: number) => void;
   setCustomer: (name: string, phone: string) => void;
   addItem: (item: MenuItem, qty?: number, custom?: CartItemCustomization, notes?: string) => void;
+  addDeal: (deal: Deal, menuItems: MenuItem[]) => void;
   removeItem: (id: string) => void;
   updateQty: (id: string, qty: number) => void;
   updateLineDiscount: (id: string, discountType: "cash" | "percent", discountValue: number) => void;
@@ -107,6 +110,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
         (line) =>
           line.menuItem.id === menuItem.id &&
           !line.notes &&
+          !line.isDeal &&
           JSON.stringify(line.customization) === JSON.stringify(customization) &&
           line.discountType === "percent" &&
           (line.discountValue ?? 0) === 0
@@ -144,6 +148,50 @@ export const usePOSStore = create<POSState>((set, get) => ({
         ],
       };
     });
+  },
+  addDeal: (deal, menuItems) => {
+    // Compute the total deal price
+    const dealItems = menuItems.filter((m) => deal.menuItemIds?.includes(m.id));
+    const rawTotal = dealItems.reduce((sum, item) => {
+      const custom = deal.itemPrices?.[item.id];
+      if (custom !== undefined) return sum + custom;
+      const varId = deal.selectedVariants?.[item.id];
+      const mod = varId ? (item.variants?.find((v) => v.id === varId)?.priceModifier ?? 0) : 0;
+      return sum + item.price + mod;
+    }, 0);
+    const dealPrice = deal.discountPercent
+      ? Math.round(rawTotal * (1 - deal.discountPercent / 100))
+      : (deal.fixedPrice ?? rawTotal);
+
+    // Use the first item as the "representative" menu item for the cart line
+    const firstItem = dealItems[0];
+    if (!firstItem) return;
+
+    const fakeDealItem: MenuItem = {
+      ...firstItem,
+      id: `deal-${deal.id}`,
+      name: deal.title,
+      price: dealPrice,
+    };
+
+    set((s) => ({
+      items: [
+        ...s.items,
+        {
+          id: `deal-${deal.id}-${Date.now()}`,
+          menuItem: fakeDealItem,
+          quantity: 1,
+          customization: {},
+          unitPrice: dealPrice,
+          discountType: "percent",
+          discountValue: 0,
+          discountAmount: 0,
+          subtotal: dealPrice,
+          isDeal: true,
+          dealTitle: deal.title,
+        },
+      ],
+    }));
   },
   removeItem: (id) =>
     set((s) => ({ items: s.items.filter((i) => i.id !== id) })),

@@ -34,6 +34,16 @@ export default function AdminMenuPage() {
   const [manualVariants, setManualVariants] = useState<{ name: string; price: string }[]>([]);
   const [catForm, setCatForm] = useState({ name: "", description: "", type: "other", hasSizes: false, hasPieces: false });
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
+  const [sizeIngredients, setSizeIngredients] = useState<Record<string, DraftIngredient[]>>({
+    small: [], medium: [], large: [], family: [],
+  });
+
+  const PIZZA_SIZES = [
+    { key: "small", label: "Small" },
+    { key: "medium", label: "Medium" },
+    { key: "large", label: "Large" },
+    { key: "family", label: "Family" },
+  ] as const;
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const load = async () => {
@@ -144,7 +154,15 @@ export default function AdminMenuPage() {
       updatedAt: now,
     } as Omit<MenuItem, "id">);
 
-    if (ingredients.length) {
+    if (isSizeBased) {
+      // Save per-size ingredients
+      for (const { key, label } of PIZZA_SIZES) {
+        const sizeIngs = sizeIngredients[key];
+        if (sizeIngs && sizeIngs.length > 0) {
+          await saveRecipeForMenuItem(`${id}_${key}`, `${form.name} (${label})`, sizeIngs);
+        }
+      }
+    } else if (ingredients.length) {
       await saveRecipeForMenuItem(id, form.name, ingredients);
     }
 
@@ -154,6 +172,7 @@ export default function AdminMenuPage() {
     setManualVariants([]);
     setImageUrl(undefined);
     setIngredients([]);
+    setSizeIngredients({ small: [], medium: [], large: [], family: [] });
     setShowAdd(false);
     load();
   }
@@ -386,7 +405,23 @@ export default function AdminMenuPage() {
               </div>
             </div>
             <ImageUpload value={imageUrl} onChange={setImageUrl} />
-            <RecipeIngredientPicker inventory={inventory} value={ingredients} onChange={setIngredients} />
+            {((categories.find(c => c.id === form.categoryId)?.type === "pizza") || (categories.find(c => c.id === form.categoryId)?.hasSizes)) ? (
+              <div className="space-y-4">
+                <p className="text-sm font-bold text-foreground">Ingredients per size (optional)</p>
+                {PIZZA_SIZES.map(({ key, label }) => (
+                  <div key={key}>
+                    <p className="mb-1.5 text-xs font-black uppercase tracking-wider text-primary">{label} Size</p>
+                    <RecipeIngredientPicker
+                      inventory={inventory}
+                      value={sizeIngredients[key] ?? []}
+                      onChange={(val) => setSizeIngredients((prev) => ({ ...prev, [key]: val }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <RecipeIngredientPicker inventory={inventory} value={ingredients} onChange={setIngredients} />
+            )}
             <Button onClick={addItem}>Save item</Button>
           </CardContent>
         </Card>

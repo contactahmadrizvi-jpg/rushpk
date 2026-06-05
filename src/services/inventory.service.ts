@@ -48,7 +48,11 @@ export async function checkStockForOrderItems(
   const shortages: string[] = [];
 
   for (const orderItem of items) {
-    const recipe = await getRecipeByMenuItemId(orderItem.menuItemId);
+    // Try size-specific recipe first (e.g. menuItemId_small), then base recipe
+    const variantId = orderItem.customization?.variantId;
+    const sizeRecipeId = variantId ? `${orderItem.menuItemId}_${variantId}` : null;
+    const recipe = (sizeRecipeId ? await getRecipeByMenuItemId(sizeRecipeId) : null)
+      ?? await getRecipeByMenuItemId(orderItem.menuItemId);
     if (!recipe) continue;
 
     for (const ing of recipe.ingredients) {
@@ -76,7 +80,11 @@ export async function deductInventoryForOrder(
   const now = new Date().toISOString();
 
   for (const orderItem of items) {
-    const recipe = await getRecipeByMenuItemId(orderItem.menuItemId);
+    // Try size-specific recipe first, fall back to base recipe
+    const variantId = orderItem.customization?.variantId;
+    const sizeRecipeId = variantId ? `${orderItem.menuItemId}_${variantId}` : null;
+    const recipe = (sizeRecipeId ? await getRecipeByMenuItemId(sizeRecipeId) : null)
+      ?? await getRecipeByMenuItemId(orderItem.menuItemId);
     if (!recipe) continue;
 
     for (const ing of recipe.ingredients) {
@@ -101,6 +109,52 @@ export async function deductInventoryForOrder(
         notes: `Order: ${orderItem.name} x${orderItem.quantity}`,
         createdAt: now,
         createdBy,
+      });
+    }
+  }
+
+  await batch.commit();
+}
+
+export async function restoreInventoryForOrder(
+  orderId: string,
+  items: OrderItem[],
+  updatedBy: string
+): Promise<void> {
+  const db = getFirestoreDb();
+  const batch = writeBatch(db);
+  const now = new Date().toISOString();
+
+  for (const orderItem of items) {
+    // Try size-specific recipe first, fall back to base recipe
+    const variantId = orderItem.customization?.variantId;
+    const sizeRecipeId = variantId ? `${orderItem.menuItemId}_${variantId}` : null;
+    const recipe = (sizeRecipeId ? await getRecipeByMenuItemId(sizeRecipeId) : null)
+      ?? await getRecipeByMenuItemId(orderItem.menuItemId);
+    if (!recipe) continue;
+
+    for (const ing of recipe.ingredients) {
+      const inv = await inventoryRepo.getById(ing.inventoryItemId);
+      if (!inv) continue;
+
+      const restoreQty = ing.quantity * orderItem.quantity;
+      const newStock = inv.currentStock + restoreQty;
+
+      batch.update(doc(db, COLLECTIONS.inventoryItems, ing.inventoryItemId), {
+        currentStock: newStock,
+        updatedAt: now,
+      });
+
+      batch.set(doc(collection(db, COLLECTIONS.stockMovements)), {
+        inventoryItemId: ing.inventoryItemId,
+        inventoryItemName: ing.inventoryItemName,
+        type: "return",
+        quantity: restoreQty,
+        unit: ing.unit,
+        referenceId: orderId,
+        notes: `Order deleted: ${orderItem.name} x${orderItem.quantity}`,
+        createdAt: now,
+        createdBy: updatedBy,
       });
     }
   }

@@ -80,9 +80,9 @@ export function subscribeMenuItems(callback: (items: MenuItem[]) => void): () =>
 }
 
 export async function getActiveDeals(): Promise<Deal[]> {
-  const now = new Date().toISOString();
   const deals = await dealsRepo.getAll([where("isActive", "==", true)]);
-  return deals.filter((d) => d.validFrom <= now && d.validTo >= now);
+  return deals;
 }
+
 
 export { categoriesRepo, itemsRepo, dealsRepo };

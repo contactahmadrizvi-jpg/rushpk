@@ -7,7 +7,7 @@ import { getFirestoreDb } from "@/lib/firebase/config";
 import { COLLECTIONS, RESTAURANT } from "@/constants";
 import type { Order, OrderItem, Payment, OrderStatus, KitchenStatus } from "@/types";
 import { BaseRepository, orderBy, limit, where } from "./base.repository";
-import { deductInventoryForOrder, checkStockForOrderItems } from "./inventory.service";
+import { deductInventoryForOrder, checkStockForOrderItems, restoreInventoryForOrder } from "./inventory.service";
 import { getNextDailyOrderNumber } from "./order-sequence.service";
 
 const ordersRepo = new BaseRepository<Order>(COLLECTIONS.orders);
@@ -196,7 +196,16 @@ export async function getTodayOrders(): Promise<Order[]> {
   return orders.filter((o) => o.createdAt >= startIso);
 }
 
-export async function deleteOrder(id: string): Promise<void> {
+export async function deleteOrder(id: string, deletedBy?: string): Promise<void> {
+  // Fetch the order first so we can restore inventory
+  const order = await ordersRepo.getById(id);
+  if (order?.items?.length) {
+    try {
+      await restoreInventoryForOrder(id, order.items, deletedBy ?? "system");
+    } catch (e) {
+      console.error("Failed to restore inventory on order delete:", e);
+    }
+  }
   await ordersRepo.delete(id);
 }
 
