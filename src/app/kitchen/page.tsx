@@ -100,9 +100,17 @@ export default function KitchenPage() {
       };
 
       if (preparedOrder.id.startsWith("local-")) {
-        // updatePendingOrderStatus writes to the correct key: rush_pos_pending_orders
+        // After sync, the local-* ID becomes the Firestore doc ID.
+        // Always update Firestore (works for synced orders). Also update local
+        // storage for orders that haven't synced yet.
         const m = await import("@/lib/pos-instant");
         m.updatePendingOrderStatus(preparedOrder.id, "ready", "ready");
+        // Best-effort Firestore update (no-op if doc doesn't exist yet)
+        try {
+          await updateDoc(doc(getFirestoreDb(), "orders", preparedOrder.id), fields);
+        } catch {
+          // order not yet synced — local storage update above is enough
+        }
       } else {
         await updateDoc(doc(getFirestoreDb(), "orders", preparedOrder.id), fields);
       }
@@ -142,9 +150,31 @@ export default function KitchenPage() {
       };
 
       if (preparedOrder.id.startsWith("local-")) {
-        // updatePendingOrderStatus writes to the correct key: rush_pos_pending_orders
+        // After sync, local-* ID becomes the Firestore doc ID.
+        // Update local storage first (for not-yet-synced orders)
         const m = await import("@/lib/pos-instant");
         m.updatePendingOrderStatus(preparedOrder.id, nextStatus, nextStatus, preparedPaymentMethod);
+
+        // Also update Firestore (works for already-synced orders)
+        try {
+          await updateDoc(doc(getFirestoreDb(), "orders", preparedOrder.id), fields);
+          // Save credit globally if applicable
+          if (preparedPaymentMethod === "credit") {
+            const { doc: fsDoc, setDoc } = await import("firebase/firestore");
+            const creditRef = fsDoc(getFirestoreDb(), "credits", preparedOrder.id);
+            await setDoc(creditRef, {
+              orderId: preparedOrder.id,
+              orderNumber: preparedOrder.dailyOrderNumber ?? preparedOrder.orderNumber,
+              customerName: preparedCreditName.trim(),
+              customerPhone: preparedOrder.customerPhone || "",
+              total: preparedOrder.total,
+              items: preparedOrder.items,
+              createdAt: now,
+            });
+          }
+        } catch {
+          // order not yet synced — local storage update above is enough
+        }
 
         // Save offline local credit
         if (preparedPaymentMethod === "credit") {
@@ -239,9 +269,31 @@ export default function KitchenPage() {
       const finalOrder = { ...settlingOrder, ...updatedFields };
 
       if (settlingOrder.id.startsWith("local-")) {
+        // Update local storage (for unsynced orders)
         const m = await import("@/lib/pos-instant");
         m.updatePendingOrderStatus(settlingOrder.id, "served", "served", paymentMethod);
-        // Also save local storage credits if local
+
+        // Also update Firestore (for already-synced orders where local- ID = Firestore doc ID)
+        try {
+          await updateDoc(doc(getFirestoreDb(), "orders", settlingOrder.id), updatedFields);
+          if (paymentMethod === "credit") {
+            const { doc: fsDoc, setDoc } = await import("firebase/firestore");
+            const creditRef = fsDoc(getFirestoreDb(), "credits", settlingOrder.id);
+            await setDoc(creditRef, {
+              orderId: settlingOrder.id,
+              orderNumber: settlingOrder.dailyOrderNumber ?? settlingOrder.orderNumber,
+              customerName: creditName.trim(),
+              customerPhone: settlingOrder.customerPhone || "",
+              total: settlingOrder.total,
+              items: settlingOrder.items,
+              createdAt: now,
+            });
+          }
+        } catch {
+          // order not yet synced — local storage update above is enough
+        }
+
+        // Save offline local credit
         if (paymentMethod === "credit") {
           const credits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
           credits.push({
