@@ -38,6 +38,7 @@ export default function AdminDealsPage() {
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
+  const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [isActive, setIsActive] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -60,14 +61,15 @@ export default function AdminDealsPage() {
 
   const computedSubtotal = useMemo(() =>
     selectedItemIds.reduce((sum, id) => {
+      const qty = itemQuantities[id] ?? 1;
       const raw = itemPrices[id];
-      if (raw && !isNaN(Number(raw))) return sum + Number(raw);
+      if (raw && !isNaN(Number(raw))) return sum + Number(raw) * qty;
       const item = menuItems.find((m) => m.id === id);
       if (!item) return sum;
       const varId = selectedVariants[id];
       const mod = varId ? (item.variants?.find((v) => v.id === varId)?.priceModifier ?? 0) : 0;
-      return sum + item.price + mod;
-    }, 0), [selectedItemIds, itemPrices, selectedVariants, menuItems]);
+      return sum + (item.price + mod) * qty;
+    }, 0), [selectedItemIds, itemPrices, itemQuantities, selectedVariants, menuItems]);
 
   const discountedTotal = useMemo(() => {
     const pct = Number(discountPercent);
@@ -79,12 +81,14 @@ export default function AdminDealsPage() {
       if (prev.includes(id)) {
         setSelectedVariants((v) => { const u = { ...v }; delete u[id]; return u; });
         setItemPrices((p) => { const u = { ...p }; delete u[id]; return u; });
+        setItemQuantities((q) => { const u = { ...q }; delete u[id]; return u; });
         return prev.filter((x) => x !== id);
       }
       const item = menuItems.find((m) => m.id === id);
       if (item?.variants?.length) {
         setSelectedVariants((v) => ({ ...v, [id]: item.variants![0]!.id }));
       }
+      setItemQuantities((q) => ({ ...q, [id]: q[id] ?? 1 }));
       return [...prev, id];
     });
   }, [menuItems]);
@@ -92,7 +96,7 @@ export default function AdminDealsPage() {
   const resetForm = () => {
     setEditingId(null); setTitle(""); setDescription("");
     setDiscountPercent(""); setSelectedItemIds([]);
-    setSelectedVariants({}); setItemPrices({});
+    setSelectedVariants({}); setItemPrices({}); setItemQuantities({});
     setIsActive(true); setSearchQuery("");
   };
 
@@ -104,6 +108,9 @@ export default function AdminDealsPage() {
     const ps: Record<string, string> = {};
     if (deal.itemPrices) Object.entries(deal.itemPrices).forEach(([k, v]) => { ps[k] = String(v); });
     setItemPrices(ps);
+    const qs: Record<string, number> = {};
+    if (deal.itemQuantities) Object.entries(deal.itemQuantities).forEach(([k, v]) => { qs[k] = v; });
+    setItemQuantities(qs);
     setIsActive(deal.isActive);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -116,6 +123,8 @@ export default function AdminDealsPage() {
     try {
       const numericPrices: Record<string, number> = {};
       Object.entries(itemPrices).forEach(([k, v]) => { if (v && !isNaN(Number(v))) numericPrices[k] = Number(v); });
+      const numericQuantities: Record<string, number> = {};
+      selectedItemIds.forEach((id) => { numericQuantities[id] = itemQuantities[id] ?? 1; });
       // Use far-future dates so deals never expire
       const payload: Omit<Deal, "id"> = {
         title, description,
@@ -123,6 +132,7 @@ export default function AdminDealsPage() {
         fixedPrice: discountedTotal > 0 ? discountedTotal : undefined,
         menuItemIds: selectedItemIds, selectedVariants,
         itemPrices: Object.keys(numericPrices).length ? numericPrices : undefined,
+        itemQuantities: numericQuantities,
         validFrom: "2000-01-01T00:00:00.000Z",
         validTo: "2100-12-31T23:59:59.999Z",
         isActive,
@@ -377,15 +387,29 @@ export default function AdminDealsPage() {
                                 </div>
                               </div>
                             )}
-                            <div>
-                              <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Deal Price (PKR)</p>
-                              <Input
-                                type="number" min="0"
-                                placeholder={`Default Rs ${defaultPrice}`}
-                                value={itemPrices[item.id] ?? ""}
-                                onChange={(e) => setItemPrices((p) => ({ ...p, [item.id]: e.target.value }))}
-                                className="h-8 text-xs font-bold"
-                              />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Deal Price (PKR)</p>
+                                <Input
+                                  type="number" min="0"
+                                  placeholder={`Default Rs ${defaultPrice}`}
+                                  value={itemPrices[item.id] ?? ""}
+                                  onChange={(e) => setItemPrices((p) => ({ ...p, [item.id]: e.target.value }))}
+                                  className="h-8 text-xs font-bold"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Quantity</p>
+                                <Input
+                                  type="number" min="1"
+                                  value={itemQuantities[item.id] ?? 1}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                                    setItemQuantities((q) => ({ ...q, [item.id]: val }));
+                                  }}
+                                  className="h-8 text-xs font-bold"
+                                />
+                              </div>
                             </div>
                           </div>
                         )}
@@ -427,10 +451,11 @@ export default function AdminDealsPage() {
               const dealItems = menuItems.filter((i) => deal.menuItemIds?.includes(i.id));
               const dealTotal = dealItems.reduce((sum, i) => {
                 const custom = deal.itemPrices?.[i.id];
-                if (custom !== undefined) return sum + custom;
-                const varId = deal.selectedVariants?.[i.id];
-                const mod = varId ? (i.variants?.find((v) => v.id === varId)?.priceModifier ?? 0) : 0;
-                return sum + i.price + mod;
+                const qty = deal.itemQuantities?.[i.id] ?? 1;
+                const price = custom !== undefined
+                  ? custom
+                  : i.price + (deal.selectedVariants?.[i.id] ? (i.variants?.find((v) => v.id === deal.selectedVariants?.[i.id])?.priceModifier ?? 0) : 0);
+                return sum + price * qty;
               }, 0);
               const finalPrice = deal.discountPercent
                 ? Math.round(dealTotal * (1 - deal.discountPercent / 100))
@@ -472,14 +497,19 @@ export default function AdminDealsPage() {
                           {dealItems.map((i) => {
                             const varId = deal.selectedVariants?.[i.id];
                             const varObj = i.variants?.find((v) => v.id === varId);
-                            const price = deal.itemPrices?.[i.id] ?? (i.price + (varObj?.priceModifier ?? 0));
+                            const qty = deal.itemQuantities?.[i.id] ?? 1;
+                            const unitPrice = deal.itemPrices?.[i.id] ?? (i.price + (varObj?.priceModifier ?? 0));
+                            const price = unitPrice * qty;
                             return (
                               <div key={i.id} className="flex-shrink-0 w-20 rounded-xl overflow-hidden border bg-muted/20 text-center">
                                 {i.imageUrl
                                   ? <img src={i.imageUrl} alt={i.name} className="h-14 w-full object-cover" />
                                   : <div className="h-14 w-full bg-muted flex items-center justify-center text-2xl">🍔</div>}
                                 <div className="p-1.5">
-                                  <p className="text-[9px] font-bold truncate">{i.name}</p>
+                                  <p className="text-[9px] font-bold truncate">
+                                    {qty > 1 && <span className="text-primary font-black mr-0.5">{qty}x</span>}
+                                    {i.name}
+                                  </p>
                                   {varObj && <p className="text-[8px] text-muted-foreground">{varObj.name}</p>}
                                   <p className="text-[9px] font-black text-primary">Rs {price}</p>
                                 </div>

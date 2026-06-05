@@ -159,16 +159,15 @@ export default function DealsPage() {
       <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {deals.map((d) => {
           const dealItems = items.filter((i) => d.menuItemIds?.includes(i.id));
-
-          // Compute per-item totals
           const lineItems = dealItems.map((item) => {
             const selectedVarId = d.selectedVariants?.[item.id];
             const varObj = item.variants?.find((v) => v.id === selectedVarId);
             const customPrice = d.itemPrices?.[item.id];
-            const price = customPrice !== undefined
+            const qty = d.itemQuantities?.[item.id] ?? 1;
+            const unitPrice = customPrice !== undefined
               ? customPrice
               : item.price + (varObj?.priceModifier ?? 0);
-            return { item, varObj, price };
+            return { item, varObj, price: unitPrice * qty, qty };
           });
 
           const subtotal = lineItems.reduce((s, l) => s + l.price, 0);
@@ -201,14 +200,17 @@ export default function DealsPage() {
                 {lineItems.length > 0 && (
                   <div className="bg-muted/30 rounded-xl border border-dashed p-3 space-y-1.5">
                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">What&apos;s Inside:</p>
-                    {lineItems.map(({ item, varObj, price }) => (
+                    {lineItems.map(({ item, varObj, price, qty }) => (
                       <div key={item.id} className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
                           {item.imageUrl && (
                             <img src={item.imageUrl} alt={item.name} className="h-6 w-6 rounded-md object-cover border flex-shrink-0" />
                           )}
                           <div className="min-w-0">
-                            <span className="text-xs font-bold block truncate">{item.name}</span>
+                            <span className="text-xs font-bold block truncate">
+                              {qty > 1 && <span className="text-primary font-black mr-1">{qty}x</span>}
+                              {item.name}
+                            </span>
                             {varObj && <span className="text-[9px] text-muted-foreground">{varObj.name}</span>}
                           </div>
                         </div>
@@ -237,7 +239,8 @@ export default function DealsPage() {
                     }
                     dealItems.forEach((item) => {
                       const varId = d.selectedVariants?.[item.id];
-                      addItem(item, 1, varId ? { variantId: varId } : {});
+                      const qty = d.itemQuantities?.[item.id] ?? 1;
+                      addItem(item, qty, varId ? { variantId: varId } : {});
                     });
                     toast.success(`"${d.title}" added to cart!`, { duration: 2000 });
                   }}

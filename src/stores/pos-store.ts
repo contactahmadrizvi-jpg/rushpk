@@ -154,10 +154,11 @@ export const usePOSStore = create<POSState>((set, get) => ({
     const dealItems = menuItems.filter((m) => deal.menuItemIds?.includes(m.id));
     const rawTotal = dealItems.reduce((sum, item) => {
       const custom = deal.itemPrices?.[item.id];
-      if (custom !== undefined) return sum + custom;
-      const varId = deal.selectedVariants?.[item.id];
-      const mod = varId ? (item.variants?.find((v) => v.id === varId)?.priceModifier ?? 0) : 0;
-      return sum + item.price + mod;
+      const qty = deal.itemQuantities?.[item.id] ?? 1;
+      const price = custom !== undefined
+        ? custom
+        : item.price + (deal.selectedVariants?.[item.id] ? (item.variants?.find((v) => v.id === deal.selectedVariants?.[item.id])?.priceModifier ?? 0) : 0);
+      return sum + price * qty;
     }, 0);
     const dealPrice = deal.discountPercent
       ? Math.round(rawTotal * (1 - deal.discountPercent / 100))

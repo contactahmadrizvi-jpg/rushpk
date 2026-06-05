@@ -59,10 +59,11 @@ async function resolveOrderItemsToRecipes(items: OrderItem[]): Promise<ResolvedR
       if (deal && deal.menuItemIds) {
         for (const subId of deal.menuItemIds) {
           const variantId = deal.selectedVariants?.[subId];
+          const subQty = deal.itemQuantities?.[subId] ?? 1;
           resolved.push({
             menuItemId: subId,
             name: `${item.name} -> (Item in deal)`,
-            quantity: item.quantity,
+            quantity: item.quantity * subQty,
             variantId,
           });
         }

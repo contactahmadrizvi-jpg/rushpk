@@ -310,10 +310,11 @@ export default function POSPage() {
     const dealItems = menu.filter((m) => deal.menuItemIds?.includes(m.id));
     const rawTotal = dealItems.reduce((sum, item) => {
       const custom = deal.itemPrices?.[item.id];
-      if (custom !== undefined) return sum + custom;
-      const varId = deal.selectedVariants?.[item.id];
-      const mod = varId ? (item.variants?.find((v) => v.id === varId)?.priceModifier ?? 0) : 0;
-      return sum + item.price + mod;
+      const qty = deal.itemQuantities?.[item.id] ?? 1;
+      const price = custom !== undefined
+        ? custom
+        : item.price + (deal.selectedVariants?.[item.id] ? (item.variants?.find((v) => v.id === deal.selectedVariants?.[item.id])?.priceModifier ?? 0) : 0);
+      return sum + price * qty;
     }, 0);
     return deal.discountPercent
       ? Math.round(rawTotal * (1 - deal.discountPercent / 100))
@@ -429,16 +430,26 @@ export default function POSPage() {
                     {/* Items preview */}
                     {dealItems.length > 0 && (
                       <div className="flex flex-1 gap-1.5 overflow-x-auto px-3 py-2 items-center [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {dealItems.map((item) => (
-                          <div key={item.id} className="flex-shrink-0 flex flex-col items-center">
-                            <div className="h-10 w-10 overflow-hidden rounded-lg bg-stone-100">
-                              {item.imageUrl
-                                ? <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
-                                : <div className="flex h-full w-full items-center justify-center text-lg">🍔</div>}
+                        {dealItems.map((item) => {
+                          const qty = deal.itemQuantities?.[item.id] ?? 1;
+                          return (
+                            <div key={item.id} className="flex-shrink-0 flex flex-col items-center">
+                              <div className="h-10 w-10 overflow-hidden rounded-lg bg-stone-100 relative">
+                                {item.imageUrl
+                                  ? <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                                  : <div className="flex h-full w-full items-center justify-center text-lg">🍔</div>}
+                                {qty > 1 && (
+                                  <span className="absolute top-0 right-0 bg-primary text-white text-[8px] font-black px-1 rounded-bl">
+                                    {qty}x
+                                  </span>
+                                )}
+                              </div>
+                              <span className="mt-0.5 max-w-[44px] truncate text-[8px] text-stone-500 text-center">
+                                {item.name}
+                              </span>
                             </div>
-                            <span className="mt-0.5 max-w-[44px] truncate text-[8px] text-stone-500 text-center">{item.name}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 

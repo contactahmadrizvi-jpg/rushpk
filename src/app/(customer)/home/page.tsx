@@ -229,8 +229,9 @@ export default function HomePage() {
                   const varId = d.selectedVariants?.[item.id];
                   const varObj = item.variants?.find((v) => v.id === varId);
                   const custom = d.itemPrices?.[item.id];
-                  const price = custom !== undefined ? custom : item.price + (varObj?.priceModifier ?? 0);
-                  return { item, varObj, price };
+                  const qty = d.itemQuantities?.[item.id] ?? 1;
+                  const unitPrice = custom !== undefined ? custom : item.price + (varObj?.priceModifier ?? 0);
+                  return { item, varObj, price: unitPrice * qty, qty };
                 });
                 const subtotal = lineItems.reduce((s, l) => s + l.price, 0);
                 const dealTotal = d.fixedPrice ?? subtotal;
@@ -268,14 +269,17 @@ export default function HomePage() {
                       {lineItems.length > 0 && (
                         <div className="bg-muted/30 rounded-xl border border-dashed p-3 space-y-1.5">
                           <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">What&apos;s Inside:</p>
-                          {lineItems.map(({ item, varObj, price }) => (
+                          {lineItems.map(({ item, varObj, price, qty }) => (
                             <div key={item.id} className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {item.imageUrl && (
                                   <img src={item.imageUrl} alt={item.name}
                                     className="h-5 w-5 rounded object-cover border shrink-0" />
                                 )}
-                                <span className="text-[11px] font-semibold truncate">{item.name}</span>
+                                <span className="text-[11px] font-semibold truncate">
+                                  {qty > 1 && <span className="text-primary font-black mr-1">{qty}x</span>}
+                                  {item.name}
+                                </span>
                                 {varObj && <span className="text-[9px] text-muted-foreground shrink-0">({varObj.name})</span>}
                               </div>
                               <span className="text-[11px] font-black text-primary shrink-0">Rs {price}</span>
@@ -298,7 +302,8 @@ export default function HomePage() {
                           if (dealItems.length === 0) { toast.error("This deal has no items configured."); return; }
                           dealItems.forEach((item) => {
                             const varId = d.selectedVariants?.[item.id];
-                            addItem(item, 1, varId ? { variantId: varId } : {});
+                            const qty = d.itemQuantities?.[item.id] ?? 1;
+                            addItem(item, qty, varId ? { variantId: varId } : {});
                           });
                           toast.success(`"${d.title}" added to cart!`, { duration: 2000 });
                         }}

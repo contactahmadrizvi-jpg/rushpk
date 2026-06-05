@@ -308,6 +308,7 @@ export interface Deal {
   menuItemIds?: string[];
   selectedVariants?: Record<string, string>; // menuItemId -> variantId
   itemPrices?: Record<string, number>; // menuItemId -> custom deal price for that item
+  itemQuantities?: Record<string, number>; // menuItemId -> quantity (default 1)
   isActive: boolean;
   validFrom: string;
   validTo: string;
