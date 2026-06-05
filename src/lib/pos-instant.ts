@@ -161,3 +161,18 @@ export function markPendingFailed(localId: string) {
   );
   writePending(list);
 }
+
+export function markPendingBillPrinted(localId: string) {
+  const list = readPending();
+  let updated = false;
+  for (const p of list) {
+    if (p.localId === localId) {
+      (p.order as any).billPrinted = true;
+      updated = true;
+    }
+  }
+  if (updated) {
+    writePending(list);
+    window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+  }
+}

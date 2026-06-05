@@ -100,15 +100,9 @@ export default function KitchenPage() {
       };
 
       if (preparedOrder.id.startsWith("local-")) {
+        // updatePendingOrderStatus writes to the correct key: rush_pos_pending_orders
         const m = await import("@/lib/pos-instant");
-        m.updatePendingOrderStatus(preparedOrder.id, "ready", "ready", preparedOrder.paymentMethod);
-        const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
-        const idx = pending.findIndex((o: any) => o.id === preparedOrder.id);
-        if (idx !== -1) {
-          pending[idx].paymentStatus = "pending";
-          localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
-          window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-        }
+        m.updatePendingOrderStatus(preparedOrder.id, "ready", "ready");
       } else {
         await updateDoc(doc(getFirestoreDb(), "orders", preparedOrder.id), fields);
       }
@@ -148,22 +142,9 @@ export default function KitchenPage() {
       };
 
       if (preparedOrder.id.startsWith("local-")) {
+        // updatePendingOrderStatus writes to the correct key: rush_pos_pending_orders
         const m = await import("@/lib/pos-instant");
         m.updatePendingOrderStatus(preparedOrder.id, nextStatus, nextStatus, preparedPaymentMethod);
-        const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
-        const idx = pending.findIndex((o: any) => o.id === preparedOrder.id);
-        if (idx !== -1) {
-          pending[idx].status = nextStatus;
-          pending[idx].kitchenStatus = nextStatus;
-          pending[idx].paymentStatus = preparedPaymentMethod === "credit" ? "credit" : "paid";
-          pending[idx].paymentMethod = preparedPaymentMethod;
-          if (preparedPaymentMethod === "credit") {
-            pending[idx].customerName = preparedCreditName.trim();
-            pending[idx].creditName = preparedCreditName.trim();
-          }
-          localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
-          window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-        }
 
         // Save offline local credit
         if (preparedPaymentMethod === "credit") {
@@ -217,13 +198,8 @@ export default function KitchenPage() {
       }
 
       if (order.id.startsWith("local-")) {
-        const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
-        const idx = pending.findIndex((o: any) => o.id === order.id);
-        if (idx !== -1) {
-          pending[idx].billPrinted = true;
-          localStorage.setItem("pos_pending_orders", JSON.stringify(pending));
-          window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-        }
+        const m = await import("@/lib/pos-instant");
+        m.markPendingBillPrinted(order.id);
       } else {
         await updateDoc(doc(getFirestoreDb(), "orders", order.id), {
           billPrinted: true,
