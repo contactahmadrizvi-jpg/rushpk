@@ -125,7 +125,6 @@ export function updatePendingOrderStatus(
         p.input.paymentMethod = paymentMethod;
         // Correctly set paymentStatus — credit sale is NOT "paid"
         p.order.paymentStatus = paymentMethod === "credit" ? "credit" : "paid";
-        p.input.paymentStatus = p.order.paymentStatus;
       }
       updated = true;
     }
