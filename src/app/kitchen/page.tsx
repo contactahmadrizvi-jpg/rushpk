@@ -132,9 +132,12 @@ export default function KitchenPage() {
 
     try {
       const now = new Date().toISOString();
+      const isDelivery = preparedOrder.type === "delivery" || preparedOrder.type === "online";
+      const nextStatus = (isDelivery ? "ready" : "served") as any;
+
       const fields = {
-        status: "ready" as const,
-        kitchenStatus: "ready" as const,
+        status: nextStatus,
+        kitchenStatus: nextStatus,
         paymentStatus: (preparedPaymentMethod === "credit" ? "credit" : "paid") as "credit" | "paid",
         paymentMethod: preparedPaymentMethod,
         updatedAt: now,
@@ -146,10 +149,12 @@ export default function KitchenPage() {
 
       if (preparedOrder.id.startsWith("local-")) {
         const m = await import("@/lib/pos-instant");
-        m.updatePendingOrderStatus(preparedOrder.id, "ready", "ready", preparedPaymentMethod);
+        m.updatePendingOrderStatus(preparedOrder.id, nextStatus, nextStatus, preparedPaymentMethod);
         const pending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
         const idx = pending.findIndex((o: any) => o.id === preparedOrder.id);
         if (idx !== -1) {
+          pending[idx].status = nextStatus;
+          pending[idx].kitchenStatus = nextStatus;
           pending[idx].paymentStatus = preparedPaymentMethod === "credit" ? "credit" : "paid";
           pending[idx].paymentMethod = preparedPaymentMethod;
           if (preparedPaymentMethod === "credit") {
@@ -402,7 +407,7 @@ export default function KitchenPage() {
     if (activeTab === "cooking") {
       return (kitchenStatus === "new" || kitchenStatus === "preparing") && order.source !== "website";
     } else if (activeTab === "payment_pending") {
-      return kitchenStatus === "ready" && order.source !== "website";
+      return kitchenStatus === "ready" && order.paymentStatus === "pending" && order.source !== "website";
     } else {
       return false; // website_orders tab has its own query below
     }
@@ -446,7 +451,7 @@ export default function KitchenPage() {
                   : "text-slate-500 hover:text-slate-900"
               )}
             >
-              ⏳ Payment Pending ({orders.filter(o => o.kitchenStatus === "ready" && o.source !== "website").length})
+              ⏳ Payment Pending ({orders.filter(o => o.kitchenStatus === "ready" && o.paymentStatus === "pending" && o.source !== "website").length})
             </button>
             <button
               onClick={() => setActiveTab("website_orders")}
