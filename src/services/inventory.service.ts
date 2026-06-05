@@ -8,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase/config";
 import { COLLECTIONS } from "@/constants";
-import type { InventoryItem, Recipe, StockMovement, OrderItem } from "@/types";
+import type { InventoryItem, Recipe, StockMovement, OrderItem, Deal } from "@/types";
 import { BaseRepository, orderBy } from "./base.repository";
 
 const inventoryRepo = new BaseRepository<InventoryItem>(
@@ -18,6 +18,7 @@ const recipeRepo = new BaseRepository<Recipe>(COLLECTIONS.recipes);
 const movementRepo = new BaseRepository<StockMovement>(
   COLLECTIONS.stockMovements
 );
+const dealsRepo = new BaseRepository<Deal>(COLLECTIONS.deals);
 
 export async function getInventoryItems(): Promise<InventoryItem[]> {
   return inventoryRepo.getAll([orderBy("name")]);
@@ -42,14 +43,51 @@ export async function getRecipeByMenuItemId(
   return { id: d.id, ...d.data() } as Recipe;
 }
 
+interface ResolvedRecipeItem {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+  variantId?: string;
+}
+
+async function resolveOrderItemsToRecipes(items: OrderItem[]): Promise<ResolvedRecipeItem[]> {
+  const resolved: ResolvedRecipeItem[] = [];
+  for (const item of items) {
+    if (item.menuItemId.startsWith("deal-")) {
+      const dealId = item.menuItemId.slice(5);
+      const deal = await dealsRepo.getById(dealId);
+      if (deal && deal.menuItemIds) {
+        for (const subId of deal.menuItemIds) {
+          const variantId = deal.selectedVariants?.[subId];
+          resolved.push({
+            menuItemId: subId,
+            name: `${item.name} -> (Item in deal)`,
+            quantity: item.quantity,
+            variantId,
+          });
+        }
+      }
+    } else {
+      resolved.push({
+        menuItemId: item.menuItemId,
+        name: item.name,
+        quantity: item.quantity,
+        variantId: item.customization?.variantId,
+      });
+    }
+  }
+  return resolved;
+}
+
 export async function checkStockForOrderItems(
   items: OrderItem[]
 ): Promise<{ ok: boolean; shortages: string[] }> {
   const shortages: string[] = [];
+  const resolvedItems = await resolveOrderItemsToRecipes(items);
 
-  for (const orderItem of items) {
+  for (const orderItem of resolvedItems) {
     // Try size-specific recipe first (e.g. menuItemId_small), then base recipe
-    const variantId = orderItem.customization?.variantId;
+    const variantId = orderItem.variantId;
     const sizeRecipeId = variantId ? `${orderItem.menuItemId}_${variantId}` : null;
     const recipe = (sizeRecipeId ? await getRecipeByMenuItemId(sizeRecipeId) : null)
       ?? await getRecipeByMenuItemId(orderItem.menuItemId);
@@ -79,9 +117,11 @@ export async function deductInventoryForOrder(
   const batch = writeBatch(db);
   const now = new Date().toISOString();
 
-  for (const orderItem of items) {
+  const resolvedItems = await resolveOrderItemsToRecipes(items);
+
+  for (const orderItem of resolvedItems) {
     // Try size-specific recipe first, fall back to base recipe
-    const variantId = orderItem.customization?.variantId;
+    const variantId = orderItem.variantId;
     const sizeRecipeId = variantId ? `${orderItem.menuItemId}_${variantId}` : null;
     const recipe = (sizeRecipeId ? await getRecipeByMenuItemId(sizeRecipeId) : null)
       ?? await getRecipeByMenuItemId(orderItem.menuItemId);
@@ -125,9 +165,11 @@ export async function restoreInventoryForOrder(
   const batch = writeBatch(db);
   const now = new Date().toISOString();
 
-  for (const orderItem of items) {
+  const resolvedItems = await resolveOrderItemsToRecipes(items);
+
+  for (const orderItem of resolvedItems) {
     // Try size-specific recipe first, fall back to base recipe
-    const variantId = orderItem.customization?.variantId;
+    const variantId = orderItem.variantId;
     const sizeRecipeId = variantId ? `${orderItem.menuItemId}_${variantId}` : null;
     const recipe = (sizeRecipeId ? await getRecipeByMenuItemId(sizeRecipeId) : null)
       ?? await getRecipeByMenuItemId(orderItem.menuItemId);

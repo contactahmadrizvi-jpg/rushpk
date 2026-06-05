@@ -408,16 +408,17 @@ export default function POSPage() {
                 const dealItems = menu.filter((m) => deal.menuItemIds?.includes(m.id));
                 return (
                   <div key={deal.id}
-                    className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200/60 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-amber-400/50">
+                    className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-amber-200/60 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-amber-400/50"
+                    style={{ height: "235px" }}>
                     {/* Deal header */}
-                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3">
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 shrink-0">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Tag className="h-4 w-4 text-white/80" />
                           <span className="text-sm font-black text-white truncate">{deal.title}</span>
                         </div>
                         {deal.discountPercent && (
-                          <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black text-white">
+                          <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black text-white shrink-0">
                             {deal.discountPercent}% OFF
                           </span>
                         )}
@@ -427,7 +428,7 @@ export default function POSPage() {
 
                     {/* Items preview */}
                     {dealItems.length > 0 && (
-                      <div className="flex gap-1.5 overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="flex flex-1 gap-1.5 overflow-x-auto px-3 py-2 items-center [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {dealItems.map((item) => (
                           <div key={item.id} className="flex-shrink-0 flex flex-col items-center">
                             <div className="h-10 w-10 overflow-hidden rounded-lg bg-stone-100">
@@ -443,7 +444,7 @@ export default function POSPage() {
 
                     {/* Add button with TOTAL price */}
                     <button type="button"
-                      className="mt-auto flex items-center justify-between bg-amber-50 px-4 py-3 hover:bg-amber-100 active:bg-amber-200 transition border-t border-amber-100"
+                      className="mt-auto shrink-0 flex items-center justify-between bg-amber-50 px-4 py-3 hover:bg-amber-100 active:bg-amber-200 transition border-t border-amber-100"
                       onClick={() => {
                         addDeal(deal, menu);
                         toast.success(`"${deal.title}" added to cart`);

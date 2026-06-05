@@ -192,9 +192,9 @@ export default function DealsPage() {
 
               {/* Content */}
               <div className="p-5 flex flex-col flex-1 gap-4">
-                <div>
-                  <h2 className="text-xl font-extrabold leading-tight group-hover:text-primary transition-colors">{d.title}</h2>
-                  <p className="text-sm text-muted-foreground font-semibold mt-1">{d.description}</p>
+                <div className="min-h-[72px] flex flex-col justify-start">
+                  <h2 className="text-xl font-extrabold leading-tight group-hover:text-primary transition-colors line-clamp-1">{d.title}</h2>
+                  <p className="text-sm text-muted-foreground font-medium mt-1 line-clamp-2">{d.description}</p>
                 </div>
 
                 {/* Per-item pricing breakdown */}

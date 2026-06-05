@@ -38,6 +38,7 @@ export interface CreateOrderInput {
   skipStockCheck?: boolean;
   predefinedDailyOrderNumber?: number;
   predefinedOrderNumber?: string;
+  predefinedOrderId?: string;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
@@ -90,7 +91,17 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     ...(input.createdBy ? { createdBy: input.createdBy } : {}),
   };
 
-  const orderId = await ordersRepo.create(orderData);
+  let orderId = input.predefinedOrderId;
+  if (orderId) {
+    const { setDoc, doc } = await import("firebase/firestore");
+    const { stripUndefined } = await import("@/lib/utils");
+    await setDoc(doc(getFirestoreDb(), COLLECTIONS.orders, orderId), stripUndefined({
+      ...orderData,
+      updatedAt: now,
+    }));
+  } else {
+    orderId = await ordersRepo.create(orderData);
+  }
   const order: Order = { id: orderId, ...orderData };
 
   if (input.paymentMethod !== "cash" || input.source === "pos") {

@@ -17,7 +17,7 @@ export async function syncPendingPosOrders(): Promise<void> {
   try {
     for (const item of pending) {
       try {
-        await createOrder({ ...item.input, skipStockCheck: true });
+        await createOrder({ ...item.input, predefinedOrderId: item.localId, skipStockCheck: true });
         removePendingByLocalId(item.localId);
       } catch {
         markPendingFailed(item.localId);

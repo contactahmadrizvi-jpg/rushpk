@@ -257,11 +257,11 @@ export default function HomePage() {
 
                     {/* ── Card Body ── */}
                     <div className="p-5 flex flex-col flex-1 gap-3">
-                      <div>
-                        <h3 className="text-lg font-extrabold group-hover:text-primary transition-colors leading-tight">
+                      <div className="min-h-[68px] flex flex-col justify-start">
+                        <h3 className="text-lg font-extrabold group-hover:text-primary transition-colors leading-tight line-clamp-1">
                           {d.title}
                         </h3>
-                        <p className="text-sm text-muted-foreground mt-1">{d.description}</p>
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{d.description}</p>
                       </div>
 
                       {/* Per-item breakdown */}
