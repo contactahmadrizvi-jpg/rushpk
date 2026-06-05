@@ -114,10 +114,19 @@ export async function deductInventoryForOrder(
   createdBy: string
 ): Promise<void> {
   const db = getFirestoreDb();
-  const batch = writeBatch(db);
   const now = new Date().toISOString();
 
   const resolvedItems = await resolveOrderItemsToRecipes(items);
+
+  // Accumulate total deductions per inventory item across ALL products
+  // (critical for deals: multiple products may share the same ingredient)
+  const deductions = new Map<string, {
+    inventoryItemId: string;
+    inventoryItemName: string;
+    unit: string;
+    totalQty: number;
+    notes: string[];
+  }>();
 
   for (const orderItem of resolvedItems) {
     // Try size-specific recipe first, fall back to base recipe
@@ -128,29 +137,46 @@ export async function deductInventoryForOrder(
     if (!recipe) continue;
 
     for (const ing of recipe.ingredients) {
-      const inv = await inventoryRepo.getById(ing.inventoryItemId);
-      if (!inv) continue;
-
       const deductQty = ing.quantity * orderItem.quantity;
-      const newStock = Math.max(0, inv.currentStock - deductQty);
-
-      batch.update(doc(db, COLLECTIONS.inventoryItems, ing.inventoryItemId), {
-        currentStock: newStock,
-        updatedAt: now,
-      });
-
-      batch.set(doc(collection(db, COLLECTIONS.stockMovements)), {
-        inventoryItemId: ing.inventoryItemId,
-        inventoryItemName: ing.inventoryItemName,
-        type: "sale_deduction",
-        quantity: deductQty,
-        unit: ing.unit,
-        referenceId: orderId,
-        notes: `Order: ${orderItem.name} x${orderItem.quantity}`,
-        createdAt: now,
-        createdBy,
-      });
+      const existing = deductions.get(ing.inventoryItemId);
+      if (existing) {
+        existing.totalQty += deductQty;
+        existing.notes.push(`${orderItem.name} x${orderItem.quantity}`);
+      } else {
+        deductions.set(ing.inventoryItemId, {
+          inventoryItemId: ing.inventoryItemId,
+          inventoryItemName: ing.inventoryItemName,
+          unit: ing.unit,
+          totalQty: deductQty,
+          notes: [`${orderItem.name} x${orderItem.quantity}`],
+        });
+      }
     }
+  }
+
+  // Now write each inventory item exactly once with the correct total
+  const batch = writeBatch(db);
+  for (const d of deductions.values()) {
+    const inv = await inventoryRepo.getById(d.inventoryItemId);
+    if (!inv) continue;
+
+    const newStock = Math.max(0, inv.currentStock - d.totalQty);
+    batch.update(doc(db, COLLECTIONS.inventoryItems, d.inventoryItemId), {
+      currentStock: newStock,
+      updatedAt: now,
+    });
+
+    batch.set(doc(collection(db, COLLECTIONS.stockMovements)), {
+      inventoryItemId: d.inventoryItemId,
+      inventoryItemName: d.inventoryItemName,
+      type: "sale_deduction",
+      quantity: d.totalQty,
+      unit: d.unit,
+      referenceId: orderId,
+      notes: `Order: ${d.notes.join(", ")}`,
+      createdAt: now,
+      createdBy,
+    });
   }
 
   await batch.commit();
@@ -162,10 +188,18 @@ export async function restoreInventoryForOrder(
   updatedBy: string
 ): Promise<void> {
   const db = getFirestoreDb();
-  const batch = writeBatch(db);
   const now = new Date().toISOString();
 
   const resolvedItems = await resolveOrderItemsToRecipes(items);
+
+  // Accumulate total restorations per inventory item across ALL products
+  const restorations = new Map<string, {
+    inventoryItemId: string;
+    inventoryItemName: string;
+    unit: string;
+    totalQty: number;
+    notes: string[];
+  }>();
 
   for (const orderItem of resolvedItems) {
     // Try size-specific recipe first, fall back to base recipe
@@ -176,29 +210,46 @@ export async function restoreInventoryForOrder(
     if (!recipe) continue;
 
     for (const ing of recipe.ingredients) {
-      const inv = await inventoryRepo.getById(ing.inventoryItemId);
-      if (!inv) continue;
-
       const restoreQty = ing.quantity * orderItem.quantity;
-      const newStock = inv.currentStock + restoreQty;
-
-      batch.update(doc(db, COLLECTIONS.inventoryItems, ing.inventoryItemId), {
-        currentStock: newStock,
-        updatedAt: now,
-      });
-
-      batch.set(doc(collection(db, COLLECTIONS.stockMovements)), {
-        inventoryItemId: ing.inventoryItemId,
-        inventoryItemName: ing.inventoryItemName,
-        type: "return",
-        quantity: restoreQty,
-        unit: ing.unit,
-        referenceId: orderId,
-        notes: `Order deleted: ${orderItem.name} x${orderItem.quantity}`,
-        createdAt: now,
-        createdBy: updatedBy,
-      });
+      const existing = restorations.get(ing.inventoryItemId);
+      if (existing) {
+        existing.totalQty += restoreQty;
+        existing.notes.push(`${orderItem.name} x${orderItem.quantity}`);
+      } else {
+        restorations.set(ing.inventoryItemId, {
+          inventoryItemId: ing.inventoryItemId,
+          inventoryItemName: ing.inventoryItemName,
+          unit: ing.unit,
+          totalQty: restoreQty,
+          notes: [`${orderItem.name} x${orderItem.quantity}`],
+        });
+      }
     }
+  }
+
+  // Now write each inventory item exactly once with the correct total
+  const batch = writeBatch(db);
+  for (const r of restorations.values()) {
+    const inv = await inventoryRepo.getById(r.inventoryItemId);
+    if (!inv) continue;
+
+    const newStock = inv.currentStock + r.totalQty;
+    batch.update(doc(db, COLLECTIONS.inventoryItems, r.inventoryItemId), {
+      currentStock: newStock,
+      updatedAt: now,
+    });
+
+    batch.set(doc(collection(db, COLLECTIONS.stockMovements)), {
+      inventoryItemId: r.inventoryItemId,
+      inventoryItemName: r.inventoryItemName,
+      type: "return",
+      quantity: r.totalQty,
+      unit: r.unit,
+      referenceId: orderId,
+      notes: `Order deleted: ${r.notes.join(", ")}`,
+      createdAt: now,
+      createdBy: updatedBy,
+    });
   }
 
   await batch.commit();
