@@ -208,6 +208,17 @@ export async function getTodayOrders(): Promise<Order[]> {
 }
 
 export async function deleteOrder(id: string, deletedBy?: string): Promise<void> {
+  // Check if it's in local pending orders first
+  if (typeof window !== "undefined") {
+    try {
+      const m = await import("@/lib/pos-instant");
+      m.removePendingByLocalId(id);
+      window.dispatchEvent(new CustomEvent("rush-pos-pending"));
+    } catch (e) {
+      console.error("Failed to remove local pending order:", e);
+    }
+  }
+
   // Fetch the order first so we can restore inventory
   const order = await ordersRepo.getById(id);
   if (order?.items?.length) {
@@ -217,6 +228,42 @@ export async function deleteOrder(id: string, deletedBy?: string): Promise<void>
       console.error("Failed to restore inventory on order delete:", e);
     }
   }
+
+  // Delete delivery record if exists
+  try {
+    const { doc, deleteDoc } = await import("firebase/firestore");
+    const { getFirestoreDb } = await import("@/lib/firebase/config");
+    await deleteDoc(doc(getFirestoreDb(), "deliveries", id));
+  } catch (e) {
+    console.error("Failed to delete delivery info:", e);
+  }
+
+  // Delete credit record if exists
+  try {
+    const { doc, deleteDoc } = await import("firebase/firestore");
+    const { getFirestoreDb } = await import("@/lib/firebase/config");
+    await deleteDoc(doc(getFirestoreDb(), "credits", id));
+  } catch (e) {
+    console.error("Failed to delete credit info:", e);
+  }
+
+  // Also delete corresponding payment documents
+  try {
+    const { getDocs, query, collection, where, writeBatch } = await import("firebase/firestore");
+    const { getFirestoreDb } = await import("@/lib/firebase/config");
+    const db = getFirestoreDb();
+    const paymentsRef = collection(db, "payments");
+    const q = query(paymentsRef, where("orderId", "==", id));
+    const qSnap = await getDocs(q);
+    if (!qSnap.empty) {
+      const batch = writeBatch(db);
+      qSnap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (payErr) {
+    console.error("Failed to delete payments for order:", payErr);
+  }
+
   await ordersRepo.delete(id);
 }
 
