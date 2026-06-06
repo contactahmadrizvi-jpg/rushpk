@@ -17,6 +17,7 @@ function AdminOrdersContent() {
   const profile = useAuthStore((s) => s.profile);
   const searchParams = useSearchParams();
   const filter = ordersFilterForUser(profile);
+  const isAdminOrManager = profile && ["super_admin", "admin", "manager"].includes(profile.role);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,24 +182,26 @@ function AdminOrdersContent() {
                 <p className="mt-2 text-xl font-bold text-primary">
                   {formatCurrency(o.total)}
                 </p>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (confirm("Are you sure you want to delete this order?")) {
-                      // Optimistic UI update to make it disappear instantly
-                      setOrders((prev) => prev.filter((item) => item.id !== o.id));
-                      try {
-                        await deleteOrder(o.id);
-                      } catch (err) {
-                        alert("Failed to delete order");
+                {isAdminOrManager && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to delete this order?")) {
+                        // Optimistic UI update to make it disappear instantly
+                        setOrders((prev) => prev.filter((item) => item.id !== o.id));
+                        try {
+                          await deleteOrder(o.id);
+                        } catch (err) {
+                          alert("Failed to delete order");
+                        }
                       }
-                    }
-                  }}
-                  className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition active:scale-95"
-                  title="Delete Order"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                    }}
+                    className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition active:scale-95"
+                    title="Delete Order"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
             <ul className="mt-4 divide-y rounded-lg border bg-muted/30 text-sm">
