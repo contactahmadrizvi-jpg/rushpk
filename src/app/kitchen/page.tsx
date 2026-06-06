@@ -43,6 +43,11 @@ export default function KitchenPage() {
   const [preparedPaymentMethod, setPreparedPaymentMethod] = useState<Order["paymentMethod"]>("cash");
   const [preparedCreditName, setPreparedCreditName] = useState("");
 
+  // Button loading states to prevent multiple clicks
+  const [isSavingEdited, setIsSavingEdited] = useState(false);
+  const [isSettlingPayment, setIsSettlingPayment] = useState(false);
+  const [isConfirmingPaid, setIsConfirmingPaid] = useState(false);
+
   useEffect(() => {
     let remote: Order[] = [];
 
@@ -135,6 +140,7 @@ export default function KitchenPage() {
       return;
     }
 
+    setIsConfirmingPaid(true);
     try {
       const now = new Date().toISOString();
       const isDelivery = preparedOrder.type === "delivery" || preparedOrder.type === "online";
@@ -217,6 +223,8 @@ export default function KitchenPage() {
       void handlePrintBill({ ...preparedOrder, ...fields });
     } catch (err) {
       toast.error("Failed to mark prepared & paid");
+    } finally {
+      setIsConfirmingPaid(false);
     }
   }
 
@@ -250,6 +258,7 @@ export default function KitchenPage() {
   async function settlePayment() {
     if (!settlingOrder) return;
 
+    setIsSettlingPayment(true);
     try {
       const now = new Date().toISOString();
       const updatedFields: any = {
@@ -336,6 +345,8 @@ export default function KitchenPage() {
       setCreditName("");
     } catch (err) {
       toast.error("Failed to settle order payment");
+    } finally {
+      setIsSettlingPayment(false);
     }
   }
 
@@ -442,6 +453,7 @@ export default function KitchenPage() {
       return;
     }
 
+    setIsSavingEdited(true);
     try {
       const newSubtotal = editedItems.reduce((sum, item) => sum + item.subtotal, 0);
       const newTotal = newSubtotal - editingOrder.discount;
@@ -501,6 +513,8 @@ export default function KitchenPage() {
       setEditingOrder(null);
     } catch (err) {
       toast.error("Failed to update order");
+    } finally {
+      setIsSavingEdited(false);
     }
   }
 
@@ -1058,8 +1072,8 @@ export default function KitchenPage() {
               <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => setEditingOrder(null)}>
                 Discard
               </Button>
-              <Button className="flex-1 rounded-xl font-bold" onClick={saveEditedOrder}>
-                Save Changes
+              <Button className="flex-1 rounded-xl font-bold" onClick={saveEditedOrder} disabled={isSavingEdited}>
+                {isSavingEdited ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>
@@ -1127,8 +1141,8 @@ export default function KitchenPage() {
                 <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => setSettlingOrder(null)}>
                   Cancel
                 </Button>
-                <Button className="flex-1 rounded-xl font-bold bg-green-600 hover:bg-green-700" onClick={settlePayment}>
-                  Complete Settlement
+                <Button className="flex-1 rounded-xl font-bold bg-green-600 hover:bg-green-700" onClick={settlePayment} disabled={isSettlingPayment}>
+                  {isSettlingPayment ? "Settling..." : "Complete Settlement"}
                 </Button>
               </div>
             </div>
@@ -1219,8 +1233,8 @@ export default function KitchenPage() {
                     <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => setPreparedStep("ask_paid")}>
                       Back
                     </Button>
-                    <Button className="flex-1 rounded-xl font-bold bg-green-600 hover:bg-green-700 active:scale-95 transition" onClick={handlePreparedPaid}>
-                      Confirm Paid
+                    <Button className="flex-1 rounded-xl font-bold bg-green-600 hover:bg-green-700 active:scale-95 transition" onClick={handlePreparedPaid} disabled={isConfirmingPaid}>
+                      {isConfirmingPaid ? "Confirming..." : "Confirm Paid"}
                     </Button>
                   </div>
                 )}
@@ -1244,8 +1258,8 @@ export default function KitchenPage() {
                   <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => setPreparedStep("select_payment")}>
                     Back
                   </Button>
-                  <Button className="flex-1 rounded-xl font-bold bg-orange-600 hover:bg-orange-700 active:scale-95 transition" onClick={handlePreparedPaid}>
-                    Confirm Credit & Print
+                  <Button className="flex-1 rounded-xl font-bold bg-orange-600 hover:bg-orange-700 active:scale-95 transition" onClick={handlePreparedPaid} disabled={isConfirmingPaid}>
+                    {isConfirmingPaid ? "Confirming..." : "Confirm Credit & Print"}
                   </Button>
                 </div>
               </div>
