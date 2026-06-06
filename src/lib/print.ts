@@ -271,13 +271,23 @@ ${itemRows}
 function buildKOTBody(order: Order): string {
   const label = formatOrderLabel(order);
   const items = order.items
-    .map(
-      (i) => `
+    .map((i) => {
+      const variantPart = i.customization?.variantName ? ` (${escapeHtml(i.customization.variantName)})` : "";
+      const addonPart = i.customization?.addonNames?.length ? i.customization.addonNames.join(", ") : "";
+      const extrasParts: string[] = [];
+      if (addonPart) extrasParts.push(addonPart);
+      if (i.customization?.extraCheese) extrasParts.push("Extra Cheese");
+      if (i.customization?.spiceLevel) extrasParts.push(i.customization.spiceLevel);
+      if (i.customization?.notes) extrasParts.push(i.customization.notes);
+      const extrasLine = extrasParts.length > 0
+        ? `<div class="item-note">${escapeHtml(extrasParts.join(" · "))}</div>`
+        : "";
+      return `
     <div class="kot-item">
-      <div class="kot-qty">${i.quantity} × ${escapeHtml(i.name)}</div>
-      ${itemExtras(i)}
-    </div>`
-    )
+      <div class="kot-qty">${i.quantity} × ${escapeHtml(i.name)}${variantPart}</div>
+      ${extrasLine}
+    </div>`;
+    })
     .join("");
   return `
 <style>
@@ -302,7 +312,7 @@ function buildKOTBody(order: Order): string {
   .order-no { font-size: 24px; font-weight: 900; margin: 2px 0; line-height: 1; }
   .kot-item { border-bottom: 2px dashed #000; padding: 4px 0; }
   .kot-qty { font-size: 12px; font-weight: 800; word-break: break-word; overflow-wrap: break-word; white-space: normal; }
-  .item-note { font-size: 9px; color: #b45309; margin-top: 2px; word-break: break-word; overflow-wrap: break-word; }
+  .item-note { font-size: 10px; font-weight: 700; color: #b45309; margin-top: 2px; word-break: break-word; overflow-wrap: break-word; }
 </style>
 <h1 style="margin-top: 0px; padding-top: 0px;">KITCHEN ORDER TICKET</h1>
 <span class="badge">${order.source === "website" ? "ONLINE" : "POS"}</span>

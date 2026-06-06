@@ -14,6 +14,12 @@ export interface POSLine {
   notes?: string;
   isDeal?: boolean;
   dealTitle?: string;
+  /** Snapshot of deal sub-items saved at sale time — for correct inventory deduction/restoration */
+  dealSnapshot?: {
+    menuItemIds: string[];
+    itemQuantities: Record<string, number>;
+    selectedVariants: Record<string, string>;
+  };
 }
 
 interface POSState {
@@ -190,6 +196,13 @@ export const usePOSStore = create<POSState>((set, get) => ({
           subtotal: dealPrice,
           isDeal: true,
           dealTitle: deal.title,
+          // Snapshot of deal contents at time of sale — used for inventory deduction/restoration
+          // even if the deal is later deleted or modified in the admin panel
+          dealSnapshot: {
+            menuItemIds: deal.menuItemIds ?? [],
+            itemQuantities: (deal.itemQuantities as Record<string, number>) ?? {},
+            selectedVariants: (deal.selectedVariants as Record<string, string>) ?? {},
+          },
         },
       ],
     }));

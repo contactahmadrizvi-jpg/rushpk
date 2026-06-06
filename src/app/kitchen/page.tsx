@@ -463,7 +463,7 @@ export default function KitchenPage() {
     setIsSavingEdited(true);
     try {
       const newSubtotal = editedItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const newTotal = newSubtotal - editingOrder.discount;
+      const newTotal = Math.max(0, newSubtotal - (editingOrder.discount ?? 0) + (editingOrder.tax ?? 0) + (editingOrder.deliveryCharge ?? 0));
       const updatedOrder = {
         ...editingOrder,
         items: editedItems,

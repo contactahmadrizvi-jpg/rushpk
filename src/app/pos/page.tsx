@@ -212,6 +212,8 @@ export default function POSPage() {
       quantity: line.quantity,
       customization: line.customization,
       subtotal: line.subtotal,
+      // Pass deal snapshot through so inventory service uses correct per-item quantities
+      ...(line.dealSnapshot ? { dealSnapshot: line.dealSnapshot } : {}),
     }));
 
     const deliveryCharge = orderType === "delivery" ? deliveryCharges : 0;
