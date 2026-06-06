@@ -5,9 +5,19 @@ import { subscribeOrders } from "@/services/orders.service";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Order } from "@/types";
 import { StatsGridSkeleton } from "@/components/ui/loading-skeletons";
-import { Edit, Trash2 } from "lucide-react";
+import { Edit, Trash2, Eye, X } from "lucide-react";
 import { getFirestoreDb } from "@/lib/firebase/config";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
+
+/** Formats a unique, human-readable order reference that includes the date.
+ *  e.g. "07-Jun #3"  — so the same dailyOrderNumber on different days is never identical. */
+function formatOrderRef(o: Order): string {
+  const d = new Date(o.createdAt);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-PK", { month: "short" });
+  const num = o.dailyOrderNumber ?? o.orderNumber;
+  return `${day}-${month} #${num}`;
+}
 
 export default function CreditSalesPage() {
   const [loading, setLoading] = useState(true);
@@ -18,6 +28,9 @@ export default function CreditSalesPage() {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   });
+
+  // View Details modal state
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
 
   // Edit State
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -91,9 +104,9 @@ export default function CreditSalesPage() {
   }, [filterType, selectedDate]);
 
   // Filter orders that were settled as "credit"
-  const creditOrders = orders.filter(
-    (o) => o.paymentStatus === ("credit" as any) || o.paymentMethod === ("credit" as any)
-  );
+  const creditOrders = orders
+    .filter((o) => o.paymentStatus === ("credit" as any) || o.paymentMethod === ("credit" as any))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const totalCredit = creditOrders.reduce((s, o) => s + o.total, 0);
 
@@ -117,8 +130,6 @@ export default function CreditSalesPage() {
       await deleteDoc(doc(db, "credits", orderId));
 
       window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-      
-      // Update local state directly
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
     } catch (err) {
       console.error(err);
@@ -140,12 +151,7 @@ export default function CreditSalesPage() {
       const localCredits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
       const updatedLocalCredits = localCredits.map((lc: any) => {
         if (lc.id === editingOrder.id) {
-          return {
-            ...lc,
-            customerName: editName.trim(),
-            creditName: editName.trim(),
-            total: editTotal,
-          };
+          return { ...lc, customerName: editName.trim(), creditName: editName.trim(), total: editTotal };
         }
         return lc;
       });
@@ -155,13 +161,7 @@ export default function CreditSalesPage() {
       const localPending = JSON.parse(localStorage.getItem("pos_pending_orders") || "[]");
       const updatedLocalPending = localPending.map((o: any) => {
         if (o.id === editingOrder.id) {
-          return {
-            ...o,
-            customerName: editName.trim(),
-            creditName: editName.trim(),
-            customerPhone: editPhone.trim(),
-            total: editTotal,
-          };
+          return { ...o, customerName: editName.trim(), creditName: editName.trim(), customerPhone: editPhone.trim(), total: editTotal };
         }
         return o;
       });
@@ -185,23 +185,15 @@ export default function CreditSalesPage() {
           total: editTotal,
         });
       } catch (e) {
-        // Document might not exist in credits collection if it was only locally marked
         console.warn("Could not update document in credits collection", e);
       }
 
       window.dispatchEvent(new CustomEvent("rush-pos-pending"));
-      
-      // Update local state directly
+
       setOrders((prev) =>
         prev.map((o) => {
           if (o.id === editingOrder.id) {
-            return {
-              ...o,
-              customerName: editName.trim(),
-              creditName: editName.trim(),
-              customerPhone: editPhone.trim(),
-              total: editTotal,
-            } as Order;
+            return { ...o, customerName: editName.trim(), creditName: editName.trim(), customerPhone: editPhone.trim(), total: editTotal } as Order;
           }
           return o;
         })
@@ -289,12 +281,12 @@ export default function CreditSalesPage() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50 border-b">
             <tr className="text-left font-bold text-stone-700">
-              <th className="p-4">Order #</th>
+              <th className="p-4">Order Ref</th>
               <th className="p-4">Customer / Debtor</th>
               <th className="p-4">Phone</th>
               <th className="p-4">Items</th>
               <th className="p-4 text-right">Amount</th>
-              <th className="p-4">Date</th>
+              <th className="p-4">Date & Time</th>
               <th className="p-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -304,8 +296,9 @@ export default function CreditSalesPage() {
                 key={o.id}
                 className="border-b last:border-0 hover:bg-stone-50/50 transition"
               >
-                <td className="p-4 font-black text-primary">
-                  #{o.dailyOrderNumber ?? o.orderNumber}
+                {/* Unique order reference: date + daily number */}
+                <td className="p-4 font-black text-primary whitespace-nowrap">
+                  {formatOrderRef(o)}
                 </td>
                 <td className="p-4 font-bold text-stone-900">
                   {(o as any).creditName || o.customerName || "—"}
@@ -314,14 +307,14 @@ export default function CreditSalesPage() {
                   {o.customerPhone || "—"}
                 </td>
                 <td className="p-4 text-stone-600 max-w-[200px]">
-                  <span className="truncate block">
+                  <span className="truncate block text-xs">
                     {o.items.map((i) => `${i.quantity}× ${i.name}`).join(", ")}
                   </span>
                 </td>
-                <td className="p-4 text-right font-black text-red-600">
+                <td className="p-4 text-right font-black text-red-600 whitespace-nowrap">
                   {formatCurrency(o.total)}
                 </td>
-                <td className="p-4 text-stone-500 text-xs">
+                <td className="p-4 text-stone-500 text-xs whitespace-nowrap">
                   {new Date(o.createdAt).toLocaleDateString("en-PK", {
                     day: "2-digit",
                     month: "short",
@@ -332,6 +325,16 @@ export default function CreditSalesPage() {
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex justify-end gap-2">
+                    {/* View Details */}
+                    <button
+                      type="button"
+                      onClick={() => setViewingOrder(o)}
+                      className="p-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition active:scale-95"
+                      title="View Full Details"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    {/* Edit */}
                     <button
                       type="button"
                       onClick={() => handleStartEdit(o)}
@@ -340,6 +343,7 @@ export default function CreditSalesPage() {
                     >
                       <Edit className="h-4 w-4" />
                     </button>
+                    {/* Delete */}
                     <button
                       type="button"
                       onClick={() => handleDelete(o.id)}
@@ -356,7 +360,7 @@ export default function CreditSalesPage() {
               <tr>
                 <td colSpan={7} className="p-8 text-center text-muted-foreground">
                   No credit sales found. Credit orders will appear here when settled
-                  with the "Credit Sale" option in Kitchen.
+                  with the &quot;Credit Sale&quot; option in Kitchen.
                 </td>
               </tr>
             )}
@@ -364,12 +368,210 @@ export default function CreditSalesPage() {
         </table>
       </div>
 
-      {/* Edit Modal */}
+      {/* ── View Details Modal ── */}
+      {viewingOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setViewingOrder(null); }}
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-stone-900 text-white">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-stone-400">Credit Sale Details</p>
+                <h3 className="text-lg font-black">{formatOrderRef(viewingOrder)}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingOrder(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+              {/* Customer Info */}
+              <div className="rounded-xl border border-stone-100 bg-stone-50 p-4 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-3">Customer Info</p>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-stone-500">Name</span>
+                  <span className="font-black text-stone-900">
+                    {(viewingOrder as any).creditName || viewingOrder.customerName || "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-stone-500">Phone</span>
+                  <span className="font-semibold text-stone-700">
+                    {viewingOrder.customerPhone || "—"}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-stone-500">Order Type</span>
+                  <span className="font-semibold text-stone-700 capitalize">
+                    {viewingOrder.type?.replace("_", " ") || "—"}
+                  </span>
+                </div>
+                {viewingOrder.tableNumber != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-stone-500">Table</span>
+                    <span className="font-semibold text-stone-700">#{viewingOrder.tableNumber}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-stone-500">Date & Time</span>
+                  <span className="font-semibold text-stone-700 text-xs">
+                    {new Date(viewingOrder.createdAt).toLocaleDateString("en-PK", {
+                      day: "2-digit", month: "short", year: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Delivery Address (if available) */}
+              {viewingOrder.deliveryAddress && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-3">Delivery Address</p>
+                  {viewingOrder.deliveryAddress.street && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-bold text-blue-400">Street</span>
+                      <span className="font-semibold text-stone-700 text-right max-w-[60%]">{viewingOrder.deliveryAddress.street}</span>
+                    </div>
+                  )}
+                  {viewingOrder.deliveryAddress.area && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-bold text-blue-400">Area</span>
+                      <span className="font-semibold text-stone-700">{viewingOrder.deliveryAddress.area}</span>
+                    </div>
+                  )}
+                  {viewingOrder.deliveryAddress.city && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-bold text-blue-400">City</span>
+                      <span className="font-semibold text-stone-700">{viewingOrder.deliveryAddress.city}</span>
+                    </div>
+                  )}
+                  {viewingOrder.deliveryAddress.phone && viewingOrder.deliveryAddress.phone !== viewingOrder.customerPhone && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-bold text-blue-400">Alt Phone</span>
+                      <span className="font-semibold text-stone-700">{viewingOrder.deliveryAddress.phone}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Delivery Notes */}
+              {viewingOrder.deliveryNotes && (
+                <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">Delivery Notes</p>
+                  <p className="text-sm text-stone-700 font-medium">{viewingOrder.deliveryNotes}</p>
+                </div>
+              )}
+
+              {/* Order Items */}
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-3">Order Items</p>
+                <div className="rounded-xl border border-stone-100 overflow-hidden">
+                  {viewingOrder.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start justify-between px-4 py-3 border-b last:border-0 bg-white hover:bg-stone-50/50 transition"
+                    >
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="font-bold text-stone-900 text-sm leading-tight">
+                          <span className="text-primary font-black">{item.quantity}×</span>{" "}
+                          {item.name}
+                        </p>
+                        {item.customization?.variantName && (
+                          <p className="text-xs text-stone-500 mt-0.5 font-medium">
+                            Size: {item.customization.variantName}
+                          </p>
+                        )}
+                        {item.customization?.addonNames && item.customization.addonNames.length > 0 && (
+                          <p className="text-xs text-stone-500 mt-0.5">
+                            + {item.customization.addonNames.join(", ")}
+                          </p>
+                        )}
+                        {item.customization?.extraCheese && (
+                          <p className="text-xs text-amber-600 mt-0.5 font-medium">+ Extra Cheese</p>
+                        )}
+                        {item.customization?.spiceLevel && (
+                          <p className="text-xs text-red-500 mt-0.5 font-medium">🌶 {item.customization.spiceLevel}</p>
+                        )}
+                        {item.customization?.notes && (
+                          <p className="text-xs text-stone-400 mt-0.5 italic">{item.customization.notes}</p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-black text-stone-900 text-sm">{formatCurrency(item.subtotal)}</p>
+                        {item.quantity > 1 && (
+                          <p className="text-[10px] text-stone-400">{formatCurrency(item.price)} ea</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Breakdown */}
+              <div className="rounded-xl border border-stone-100 bg-stone-50 p-4 space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-3">Price Breakdown</p>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-stone-500">Subtotal</span>
+                  <span className="font-semibold text-stone-700">{formatCurrency(viewingOrder.subtotal)}</span>
+                </div>
+                {viewingOrder.discount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-green-600">Discount</span>
+                    <span className="font-semibold text-green-600">-{formatCurrency(viewingOrder.discount)}</span>
+                  </div>
+                )}
+                {viewingOrder.tax > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-stone-500">Tax</span>
+                    <span className="font-semibold text-stone-700">{formatCurrency(viewingOrder.tax)}</span>
+                  </div>
+                )}
+                {viewingOrder.deliveryCharge > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-stone-500">Delivery Charge</span>
+                    <span className="font-semibold text-stone-700">{formatCurrency(viewingOrder.deliveryCharge)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 border-t border-stone-200">
+                  <span className="font-black text-stone-900 text-base">Total Due (Credit)</span>
+                  <span className="font-black text-red-600 text-lg">{formatCurrency(viewingOrder.total)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 px-6 py-4 border-t bg-stone-50">
+              <button
+                type="button"
+                onClick={() => { setViewingOrder(null); handleStartEdit(viewingOrder); }}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-100 rounded-lg transition"
+              >
+                <Edit className="h-4 w-4" /> Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingOrder(null)}
+                className="px-5 py-2 text-sm font-bold text-white bg-stone-900 hover:bg-stone-800 rounded-lg transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Modal ── */}
       {editingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-lg font-bold text-stone-900">Edit Credit Sale</h3>
-            
+
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-bold text-stone-500 uppercase">Debtor / Customer Name</label>
