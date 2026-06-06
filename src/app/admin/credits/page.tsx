@@ -371,10 +371,10 @@ export default function CreditSalesPage() {
       {/* ── View Details Modal ── */}
       {viewingOrder && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setViewingOrder(null); }}
         >
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-stone-900 text-white">
               <div>
@@ -390,7 +390,7 @@ export default function CreditSalesPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[60vh] sm:max-h-[75vh]">
               {/* Customer Info */}
               <div className="rounded-xl border border-stone-100 bg-stone-50 p-4 space-y-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-3">Customer Info</p>
