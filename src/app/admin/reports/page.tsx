@@ -60,12 +60,15 @@ export default function ReportsPage() {
     a.click();
   }
 
+  // Exclude credit orders from collected revenue (credit = unpaid debt, not actual income)
   const cash = orders.filter((o) => o.paymentMethod === "cash" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
   const online = orders.filter((o) => o.paymentMethod === "online" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
   const card = orders.filter((o) => o.paymentMethod === "card" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
+  const creditOutstanding = orders.filter((o) => (o.paymentMethod === "credit" || o.paymentStatus === "credit") && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
+  const creditCount = orders.filter((o) => (o.paymentMethod === "credit" || o.paymentStatus === "credit") && o.status !== "cancelled").length;
   const websiteRevenue = orders.filter((o) => o.source === "website" && o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
   const websiteCount = orders.filter((o) => o.source === "website" && o.status !== "cancelled").length;
-  const totalRevenue = cash + online + card;
+  const totalRevenue = cash + online + card; // credit excluded — it's outstanding debt
 
   if (loading) {
     return (
@@ -137,11 +140,11 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Reports Metrics Cards */}
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Revenue</p>
           <p className="mt-2 text-2xl font-black text-primary">{formatCurrency(totalRevenue)}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground font-semibold">Credit excluded</p>
         </div>
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cash Revenue</p>
@@ -165,6 +168,16 @@ export default function ReportsPage() {
           <p className="mt-2 text-2xl font-bold text-stone-900">{orders.length}</p>
         </div>
       </div>
+      {creditOutstanding > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 flex items-center justify-between shadow-sm">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-red-500">Credit Outstanding (Not Collected)</p>
+            <p className="mt-1 text-2xl font-black text-red-600">{formatCurrency(creditOutstanding)}</p>
+            <p className="mt-0.5 text-xs text-red-400">{creditCount} credit order{creditCount !== 1 ? "s" : ""} — not included in Total Revenue</p>
+          </div>
+          <p className="text-xs text-red-400 font-semibold max-w-[200px] text-right">These are outstanding debts owed by customers. Manage them in Credit Sales.</p>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3 mt-6">
         {/* Best Sellers */}
@@ -202,32 +215,38 @@ export default function ReportsPage() {
         {/* Payment Methods breakdown */}
         <div className="space-y-4">
           <h2 className="font-extrabold text-lg text-stone-900">Sales Source Breakdown</h2>
-          <div className="rounded-xl border bg-card p-5 shadow-sm space-y-3">
-            <div className="flex justify-between border-b pb-2 text-sm font-semibold">
-              <span className="text-stone-500">Source / Type</span>
-              <span>Count</span>
+            <div className="rounded-xl border bg-card p-5 shadow-sm space-y-3">
+              <div className="flex justify-between border-b pb-2 text-sm font-semibold">
+                <span className="text-stone-500">Source / Type</span>
+                <span>Count</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="font-bold">POS Orders</span>
+                <span className="font-semibold">{orders.filter((o) => o.source === "pos").length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="font-bold">Online / Website</span>
+                <span className="font-semibold">{orders.filter((o) => o.source === "website").length}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t pt-3">
+                <span className="font-bold">Dine In</span>
+                <span className="font-semibold">{orders.filter((o) => o.type === "dine_in").length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="font-bold">Takeaway</span>
+                <span className="font-semibold">{orders.filter((o) => o.type === "takeaway").length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="font-bold">Delivery</span>
+                <span className="font-semibold">{orders.filter((o) => o.type === "delivery").length}</span>
+              </div>
+              {creditCount > 0 && (
+                <div className="flex justify-between text-sm border-t pt-3">
+                  <span className="font-bold text-red-600">Credit Sales (Unpaid)</span>
+                  <span className="font-semibold text-red-600">{creditCount} · {formatCurrency(creditOutstanding)}</span>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="font-bold">POS Orders</span>
-              <span className="font-semibold">{orders.filter((o) => o.source === "pos").length}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="font-bold">Online / Website</span>
-              <span className="font-semibold">{orders.filter((o) => o.source === "website").length}</span>
-            </div>
-            <div className="flex justify-between text-sm border-t pt-3">
-              <span className="font-bold">Dine In</span>
-              <span className="font-semibold">{orders.filter((o) => o.type === "dine_in").length}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="font-bold">Takeaway</span>
-              <span className="font-semibold">{orders.filter((o) => o.type === "takeaway").length}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="font-bold">Delivery</span>
-              <span className="font-semibold">{orders.filter((o) => o.type === "delivery").length}</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>

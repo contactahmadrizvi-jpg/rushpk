@@ -23,6 +23,8 @@ function getRevenueByDay(orders: any[]) {
   const daysMap: Record<string, number> = {};
   orders.forEach((o) => {
     if (o.status === "cancelled") return;
+    // Exclude credit sales from collected revenue
+    if (o.paymentMethod === "credit" || o.paymentStatus === "credit") return;
     const d = new Date(o.createdAt);
     const key = d.toLocaleDateString("en-PK", { day: "2-digit", month: "short" });
     daysMap[key] = (daysMap[key] || 0) + o.total;
@@ -113,8 +115,13 @@ export default function AdminDashboardPage() {
   if (loading) return <div className="grid gap-4 md:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
 
   // Compute dashboard metrics dynamically from loaded orders
+  // Exclude credit orders from collected revenue (credit = unpaid debt, not actual income)
   const todayRevenue = orders
-    .filter((o) => o.status !== "cancelled")
+    .filter((o) => o.status !== "cancelled" && o.paymentMethod !== "credit" && o.paymentStatus !== "credit")
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const creditOutstanding = orders
+    .filter((o) => o.status !== "cancelled" && (o.paymentMethod === "credit" || o.paymentStatus === "credit"))
     .reduce((sum, o) => sum + o.total, 0);
 
   const pendingOrders = orders.filter(
@@ -134,8 +141,8 @@ export default function AdminDashboardPage() {
     .reduce((sum, o) => sum + o.total, 0);
 
   const cards = [
-    { label: viewMode === "day" ? "Selected Date Revenue" : "Selected Period Revenue", value: formatCurrency(todayRevenue), icon: DollarSign },
-    { label: viewMode === "day" ? "Selected Date Orders" : "Selected Period Orders", value: String(orders.length), icon: ShoppingBag },
+    { label: viewMode === "day" ? "Collected Revenue" : "Collected Revenue", value: formatCurrency(todayRevenue), icon: DollarSign },
+    { label: viewMode === "day" ? "Selected Date Orders" : "Selected Period Orders", value: String(orders.filter(o => o.status !== "cancelled").length), icon: ShoppingBag },
     { label: "Pending Orders Count", value: String(pendingOrders), icon: TrendingUp },
     { label: "Low Stock Alert Items", value: String(lowStockCount), icon: AlertTriangle },
   ];
@@ -188,6 +195,15 @@ export default function AdminDashboardPage() {
           </Card>
         ))}
       </div>
+      {creditOutstanding > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 flex items-center justify-between shadow-sm">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-red-500">Credit Outstanding (Not Collected)</p>
+            <p className="mt-1 text-2xl font-black text-red-600">{formatCurrency(creditOutstanding)}</p>
+          </div>
+          <p className="text-xs text-red-400 font-semibold max-w-[200px] text-right">This amount is owed by customers on credit — excluded from revenue.</p>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="shadow-sm">

@@ -50,17 +50,21 @@ export default function CreditSalesPage() {
     }
 
     const unsub = subscribeOrders((list) => {
-      // Merge local storage credits if present
+      // Merge local storage credits — but only include ones NOT already synced to Firestore
+      // (prevents double-showing once a local order gets synced)
       let localMapped: Order[] = [];
       try {
         const localCredits = JSON.parse(localStorage.getItem("pos_local_credits") || "[]");
-        localMapped = localCredits.map((lc: any) => ({
-          ...lc,
-          dailyOrderNumber: lc.orderNumber ?? lc.dailyOrderNumber ?? 999,
-          paymentStatus: "credit",
-          paymentMethod: "credit",
-          createdAt: lc.createdAt || new Date().toISOString(),
-        }));
+        const syncedIds = new Set(list.map((o) => o.id));
+        localMapped = localCredits
+          .filter((lc: any) => !syncedIds.has(lc.id)) // skip if already in Firestore
+          .map((lc: any) => ({
+            ...lc,
+            dailyOrderNumber: lc.orderNumber ?? lc.dailyOrderNumber ?? 999,
+            paymentStatus: "credit",
+            paymentMethod: "credit",
+            createdAt: lc.createdAt || new Date().toISOString(),
+          }));
 
         if (startIso && endIso) {
           localMapped = localMapped.filter(
@@ -71,7 +75,16 @@ export default function CreditSalesPage() {
         console.error("Failed to parse local credits", e);
       }
 
-      setOrders([...localMapped, ...list]);
+      // Merge and deduplicate by ID as a final safety net
+      const merged = [...localMapped, ...list];
+      const seen = new Set<string>();
+      const deduped = merged.filter((o) => {
+        if (seen.has(o.id)) return false;
+        seen.add(o.id);
+        return true;
+      });
+
+      setOrders(deduped);
       setLoading(false);
     }, startIso, endIso);
     return () => unsub();
