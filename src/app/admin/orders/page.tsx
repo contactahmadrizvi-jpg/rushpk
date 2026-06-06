@@ -42,13 +42,12 @@ function AdminOrdersContent() {
     }
     setLoading(true);
 
-    const start = new Date(`${selectedDate}T00:00:00`);
-    const end = new Date(`${selectedDate}T23:59:59.999`);
+    let remoteList: Order[] = [];
 
-    return subscribeOrders((list) => {
-      let filteredRemote = list;
+    const apply = (remote: Order[]) => {
+      let filteredRemote = remote;
       if (filter === "online") {
-        filteredRemote = list.filter((o) => o.source === "website");
+        filteredRemote = remote.filter((o) => o.source === "website");
       }
 
       const pendingLocal = getPendingKitchenOrders();
@@ -69,7 +68,25 @@ function AdminOrdersContent() {
 
       setOrders(merged);
       setLoading(false);
+    };
+
+    const start = new Date(`${selectedDate}T00:00:00`);
+    const end = new Date(`${selectedDate}T23:59:59.999`);
+
+    const unsub = subscribeOrders((list) => {
+      remoteList = list;
+      apply(list);
     }, start.toISOString(), end.toISOString());
+
+    const onPending = () => apply(remoteList);
+    window.addEventListener("rush-pos-pending", onPending);
+    window.addEventListener("storage", onPending);
+
+    return () => {
+      unsub();
+      window.removeEventListener("rush-pos-pending", onPending);
+      window.removeEventListener("storage", onPending);
+    };
   }, [filter, selectedDate]);
 
   if (!canViewOrders(profile)) {
