@@ -139,5 +139,17 @@ service cloud.firestore {
       allow create: if isStaff();
       allow update, delete: if false;
     }
+
+    match /credits/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /deliveries/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
   }
 }

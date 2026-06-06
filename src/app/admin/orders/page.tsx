@@ -12,6 +12,7 @@ import { canViewOrders, ordersFilterForUser } from "@/lib/permissions";
 import type { Order } from "@/types";
 import { OrderListSkeleton } from "@/components/ui/loading-skeletons";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 function AdminOrdersContent() {
   const profile = useAuthStore((s) => s.profile);
@@ -186,13 +187,15 @@ function AdminOrdersContent() {
                   <button
                     type="button"
                     onClick={async () => {
-                      if (confirm("Are you sure you want to delete this order?")) {
-                        // Optimistic UI update to make it disappear instantly
+                      if (confirm(`Delete Order #${o.dailyOrderNumber ?? o.orderNumber}? This will restore inventory.`)) {
+                        // Optimistic: remove from UI instantly
                         setOrders((prev) => prev.filter((item) => item.id !== o.id));
                         try {
                           await deleteOrder(o.id);
-                        } catch (err) {
-                          alert("Failed to delete order");
+                          toast.success(`Order #${o.dailyOrderNumber ?? o.orderNumber} deleted`);
+                        } catch (err: any) {
+                          // If Firestore delete failed, put the order back
+                          toast.error(err?.message || "Failed to delete order. Check your permissions.");
                         }
                       }
                     }}

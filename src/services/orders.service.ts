@@ -208,7 +208,7 @@ export async function getTodayOrders(): Promise<Order[]> {
 }
 
 export async function deleteOrder(id: string, deletedBy?: string): Promise<void> {
-  // Check if it's in local pending orders first
+  // ── Step 1: Remove from local pending queue (instant, no network) ──
   if (typeof window !== "undefined") {
     try {
       const m = await import("@/lib/pos-instant");
@@ -219,52 +219,51 @@ export async function deleteOrder(id: string, deletedBy?: string): Promise<void>
     }
   }
 
-  // Fetch the order first so we can restore inventory
-  const order = await ordersRepo.getById(id);
-  if (order?.items?.length) {
-    try {
-      await restoreInventoryForOrder(id, order.items, deletedBy ?? "system");
-    } catch (e) {
-      console.error("Failed to restore inventory on order delete:", e);
-    }
-  }
-
-  // Delete delivery record if exists
+  // ── Step 2: Fetch order details (for inventory restore) ──
+  let order: Order | null = null;
   try {
-    const { doc, deleteDoc } = await import("firebase/firestore");
-    const { getFirestoreDb } = await import("@/lib/firebase/config");
-    await deleteDoc(doc(getFirestoreDb(), "deliveries", id));
+    order = await ordersRepo.getById(id);
   } catch (e) {
-    console.error("Failed to delete delivery info:", e);
+    console.error("Failed to fetch order for cleanup:", e);
   }
 
-  // Delete credit record if exists
-  try {
-    const { doc, deleteDoc } = await import("firebase/firestore");
-    const { getFirestoreDb } = await import("@/lib/firebase/config");
-    await deleteDoc(doc(getFirestoreDb(), "credits", id));
-  } catch (e) {
-    console.error("Failed to delete credit info:", e);
-  }
-
-  // Also delete corresponding payment documents
-  try {
-    const { getDocs, query, collection, where, writeBatch } = await import("firebase/firestore");
-    const { getFirestoreDb } = await import("@/lib/firebase/config");
-    const db = getFirestoreDb();
-    const paymentsRef = collection(db, "payments");
-    const q = query(paymentsRef, where("orderId", "==", id));
-    const qSnap = await getDocs(q);
-    if (!qSnap.empty) {
-      const batch = writeBatch(db);
-      qSnap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-    }
-  } catch (payErr) {
-    console.error("Failed to delete payments for order:", payErr);
-  }
-
+  // ── Step 3: DELETE THE ORDER FROM FIRESTORE FIRST ──
+  // Do this before any cleanup so even if cleanup fails the order is gone.
   await ordersRepo.delete(id);
+
+  // ── Step 4: Restore inventory asynchronously (non-blocking) ──
+  if (order?.items?.length) {
+    restoreInventoryForOrder(id, order.items, deletedBy ?? "system").catch((e) =>
+      console.error("Failed to restore inventory on order delete:", e)
+    );
+  }
+
+  // ── Step 5: Delete associated payment documents ──
+  import("firebase/firestore")
+    .then(async ({ getDocs, query, collection, where, writeBatch }) => {
+      const { getFirestoreDb } = await import("@/lib/firebase/config");
+      const db = getFirestoreDb();
+      const q = query(collection(db, "payments"), where("orderId", "==", id));
+      const qSnap = await getDocs(q);
+      if (!qSnap.empty) {
+        const batch = writeBatch(db);
+        qSnap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+    })
+    .catch((e) => console.error("Failed to delete payments for order:", e));
+
+  // ── Step 6: Delete delivery & credit records (best-effort) ──
+  import("firebase/firestore")
+    .then(async ({ doc, deleteDoc }) => {
+      const { getFirestoreDb } = await import("@/lib/firebase/config");
+      const db = getFirestoreDb();
+      await Promise.allSettled([
+        deleteDoc(doc(db, "deliveries", id)),
+        deleteDoc(doc(db, "credits", id)),
+      ]);
+    })
+    .catch((e) => console.error("Failed to delete delivery/credit records:", e));
 }
 
 export { ordersRepo, paymentsRepo };
