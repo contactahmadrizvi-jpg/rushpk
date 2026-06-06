@@ -5,10 +5,10 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cn, parseDate, formatCurrency } from "@/lib/utils";
 import { subscribeKitchenOrders } from "@/services/orders.service";
-import { subscribeMenuItems } from "@/services/menu.service";
+import { subscribeMenuItems, getActiveDeals } from "@/services/menu.service";
 import { getPendingKitchenOrders } from "@/lib/pos-instant";
 import { playOrderSound, printReceipt, printKOT } from "@/lib/print";
-import type { Order, KitchenStatus, MenuItem } from "@/types";
+import type { Order, KitchenStatus, MenuItem, Deal, MenuVariant } from "@/types";
 import { RESTAURANT } from "@/constants";
 import { KitchenColumnsSkeleton } from "@/components/ui/loading-skeletons";
 import { doc, updateDoc } from "firebase/firestore";
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const prevCount = useRef(0);
 
@@ -66,6 +67,8 @@ export default function KitchenPage() {
     const unsubMenu = subscribeMenuItems((items) => {
       setMenuItems(items);
     });
+
+    getActiveDeals().then(setDeals).catch(console.error);
 
     const onPending = () => apply();
     window.addEventListener("rush-pos-pending", onPending);
@@ -365,12 +368,20 @@ export default function KitchenPage() {
     setEditedItems(next);
   }
 
-  function handleDirectAddMenuItem(menuItem: MenuItem) {
-    // Check if item already exists in edited list
-    const existingIdx = editedItems.findIndex(i => i.menuItemId === menuItem.id);
+  function handleDirectAddMenuItem(menuItem: MenuItem, variant?: MenuVariant) {
+    const finalPrice = menuItem.price + (variant ? variant.priceModifier : 0);
+    const displayName = variant ? `${menuItem.name} (${variant.name})` : menuItem.name;
+    const customization = variant ? { variantId: variant.id, variantName: variant.name } : {};
+
+    // Check if item already exists in edited list with the same customization/variant
+    const existingIdx = editedItems.findIndex(i => 
+      i.menuItemId === menuItem.id && 
+      JSON.stringify(i.customization || {}) === JSON.stringify(customization)
+    );
+
     if (existingIdx !== -1) {
       handleUpdateQty(existingIdx, 1);
-      toast.success(`Added one more ${menuItem.name}`);
+      toast.success(`Added one more ${displayName}`);
       return;
     }
 
@@ -378,14 +389,50 @@ export default function KitchenPage() {
       id: `added-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       menuItemId: menuItem.id,
       name: menuItem.name,
-      price: menuItem.price,
+      price: finalPrice,
       quantity: 1,
-      subtotal: menuItem.price,
+      subtotal: finalPrice,
+      customization,
+    };
+
+    setEditedItems([...editedItems, newItem]);
+    toast.success(`Added ${displayName}`);
+  }
+
+  function handleAddDeal(deal: Deal) {
+    const existingIdx = editedItems.findIndex(i => i.menuItemId === `deal-${deal.id}`);
+    if (existingIdx !== -1) {
+      handleUpdateQty(existingIdx, 1);
+      toast.success(`Added one more "${deal.title}"`);
+      return;
+    }
+
+    // Compute deal price
+    const dealItems = menuItems.filter((m) => deal.menuItemIds?.includes(m.id));
+    const rawTotal = dealItems.reduce((sum, item) => {
+      const custom = deal.itemPrices?.[item.id];
+      const qty = deal.itemQuantities?.[item.id] ?? 1;
+      const price = custom !== undefined
+        ? custom
+        : item.price + (deal.selectedVariants?.[item.id] ? (item.variants?.find((v) => v.id === deal.selectedVariants?.[item.id])?.priceModifier ?? 0) : 0);
+      return sum + price * qty;
+    }, 0);
+    const dealPrice = deal.discountPercent
+      ? Math.round(rawTotal * (1 - deal.discountPercent / 100))
+      : (deal.fixedPrice ?? rawTotal);
+
+    const newItem: Order["items"][number] = {
+      id: `added-deal-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      menuItemId: `deal-${deal.id}`,
+      name: deal.title,
+      price: dealPrice,
+      quantity: 1,
+      subtotal: dealPrice,
       customization: {},
     };
 
     setEditedItems([...editedItems, newItem]);
-    toast.success(`Added ${menuItem.name}`);
+    toast.success(`Added deal: ${deal.title}`);
   }
 
   async function saveEditedOrder() {
@@ -405,13 +452,41 @@ export default function KitchenPage() {
         total: newTotal,
       };
 
-      if (editingOrder.id.startsWith("local-")) {
-        const m = await import("@/lib/pos-instant");
+      const m = await import("@/lib/pos-instant");
+      const isLocalPending = m.getPendingPosOrders().some((p) => p.localId === editingOrder.id);
+
+      if (isLocalPending) {
         m.updatePendingOrderItems(editingOrder.id, editedItems, newSubtotal, newTotal);
         toast.success("Local order updated!");
         void printKOT(updatedOrder);
         setEditingOrder(null);
         return;
+      }
+
+      // Update inventory stock (restore old order items, deduct new order items)
+      try {
+        const { restoreInventoryForOrder, deductInventoryForOrder } = await import("@/services/inventory.service");
+        await restoreInventoryForOrder(editingOrder.id, editingOrder.items, "kitchen-edit");
+        await deductInventoryForOrder(editingOrder.id, editedItems, "kitchen-edit");
+      } catch (invErr) {
+        console.error("Inventory update error:", invErr);
+      }
+
+      // Update payment document amount if exists
+      try {
+        const { getDocs, query, collection, where, updateDoc: updateFsDoc } = await import("firebase/firestore");
+        const paymentsRef = collection(getFirestoreDb(), "payments");
+        const q = query(paymentsRef, where("orderId", "==", editingOrder.id));
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          for (const payDoc of qSnap.docs) {
+            await updateFsDoc(payDoc.ref, {
+              amount: newTotal,
+            });
+          }
+        }
+      } catch (payErr) {
+        console.error("Payment update error:", payErr);
       }
 
       await updateDoc(doc(getFirestoreDb(), "orders", editingOrder.id), {
@@ -863,29 +938,84 @@ export default function KitchenPage() {
                 className="h-10 text-xs rounded-xl border bg-white px-3"
               />
               
-              {menuSearch.trim() && (
-                <div className="max-h-36 overflow-y-auto border rounded-xl bg-white p-2 grid grid-cols-2 gap-1.5">
-                  {menuItems
-                    .filter((m) =>
-                      m.name.toLowerCase().includes(menuSearch.toLowerCase())
-                    )
-                    .slice(0, 10)
-                    .map((m) => (
+              {(() => {
+                if (!menuSearch.trim()) return null;
+                const queryStr = menuSearch.toLowerCase();
+                const matchedItems = menuItems
+                  .filter((m) => m.name.toLowerCase().includes(queryStr))
+                  .slice(0, 10)
+                  .flatMap((m) => {
+                    if (m.variants && m.variants.length > 0) {
+                      return m.variants.map((v) => ({
+                        key: `${m.id}-${v.id}`,
+                        label: `${m.name} (${v.name})`,
+                        price: m.price + v.priceModifier,
+                        onClick: () => handleDirectAddMenuItem(m, v),
+                        isDeal: false,
+                      }));
+                    }
+                    return [{
+                      key: m.id,
+                      label: m.name,
+                      price: m.price,
+                      onClick: () => handleDirectAddMenuItem(m),
+                      isDeal: false,
+                    }];
+                  });
+
+                const matchedDeals = deals
+                  .filter((d) =>
+                    d.title.toLowerCase().includes(queryStr) ||
+                    (d.description && d.description.toLowerCase().includes(queryStr))
+                  )
+                  .slice(0, 5)
+                  .map((d) => {
+                    const dealItems = menuItems.filter((m) => d.menuItemIds?.includes(m.id));
+                    const rawTotal = dealItems.reduce((sum, item) => {
+                      const custom = d.itemPrices?.[item.id];
+                      const qty = d.itemQuantities?.[item.id] ?? 1;
+                      const price = custom !== undefined
+                        ? custom
+                        : item.price + (d.selectedVariants?.[item.id] ? (item.variants?.find((v) => v.id === d.selectedVariants?.[item.id])?.priceModifier ?? 0) : 0);
+                      return sum + price * qty;
+                    }, 0);
+                    const dealPrice = d.discountPercent
+                      ? Math.round(rawTotal * (1 - d.discountPercent / 100))
+                      : (d.fixedPrice ?? rawTotal);
+
+                    return {
+                      key: `deal-${d.id}`,
+                      label: `🎁 ${d.title}`,
+                      price: dealPrice,
+                      onClick: () => handleAddDeal(d),
+                      isDeal: true,
+                    };
+                  });
+
+                const results = [...matchedItems, ...matchedDeals];
+
+                return (
+                  <div className="max-h-36 overflow-y-auto border rounded-xl bg-white p-2 grid grid-cols-2 gap-1.5">
+                    {results.map((item) => (
                       <button
-                        key={m.id}
+                        key={item.key}
                         type="button"
-                        onClick={() => handleDirectAddMenuItem(m)}
-                        className="text-left p-2 border rounded-lg text-xs font-bold hover:bg-orange-50 hover:border-primary transition flex flex-col justify-between"
+                        onClick={item.onClick}
+                        className={cn(
+                          "text-left p-2 border rounded-lg text-xs font-bold hover:bg-orange-50 hover:border-primary transition flex flex-col justify-between",
+                          item.isDeal ? "border-amber-200 bg-amber-50/20 hover:bg-amber-50" : ""
+                        )}
                       >
-                        <span className="truncate">{m.name}</span>
-                        <span className="text-primary font-black mt-0.5">{m.price.toLocaleString()} PKR</span>
+                        <span className="truncate">{item.label}</span>
+                        <span className="text-primary font-black mt-0.5">{item.price.toLocaleString()} PKR</span>
                       </button>
                     ))}
-                  {menuItems.filter((m) => m.name.toLowerCase().includes(menuSearch.toLowerCase())).length === 0 && (
-                    <span className="col-span-2 text-center text-xs text-slate-400 py-4">No matching items</span>
-                  )}
-                </div>
-              )}
+                    {results.length === 0 && (
+                      <span className="col-span-2 text-center text-xs text-slate-400 py-4">No matching items</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Items list */}
