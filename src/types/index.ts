@@ -226,6 +226,12 @@ export interface OrderItem {
   quantity: number;
   customization?: CartItemCustomization;
   subtotal: number;
+  /** Snapshot of deal sub-items saved at order time so inventory can be restored even if the deal is later deleted */
+  dealSnapshot?: {
+    menuItemIds: string[];
+    itemQuantities: Record<string, number>;
+    selectedVariants: Record<string, string>;
+  };
 }
 
 export interface Order {

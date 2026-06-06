@@ -440,6 +440,13 @@ export default function KitchenPage() {
       quantity: 1,
       subtotal: dealPrice,
       customization: {},
+      // Snapshot of deal contents at time of adding — used for inventory restoration
+      // even if the deal is later deleted or modified in the admin panel
+      dealSnapshot: {
+        menuItemIds: deal.menuItemIds ?? [],
+        itemQuantities: deal.itemQuantities ?? {},
+        selectedVariants: (deal.selectedVariants as Record<string, string>) ?? {},
+      },
     };
 
     setEditedItems([...editedItems, newItem]);

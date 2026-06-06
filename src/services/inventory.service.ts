@@ -55,11 +55,31 @@ async function resolveOrderItemsToRecipes(items: OrderItem[]): Promise<ResolvedR
   for (const item of items) {
     if (item.menuItemId.startsWith("deal-")) {
       const dealId = item.menuItemId.slice(5);
-      const deal = await dealsRepo.getById(dealId);
-      if (deal && deal.menuItemIds) {
-        for (const subId of deal.menuItemIds) {
-          const variantId = deal.selectedVariants?.[subId];
-          const subQty = deal.itemQuantities?.[subId] ?? 1;
+
+      // ── Snapshot-first: use data stored on the order item at sale time ──
+      // Falls back to Firestore only if no snapshot (older orders placed before this fix)
+      let menuItemIds: string[] | undefined;
+      let itemQuantities: Record<string, number> | undefined;
+      let selectedVariants: Record<string, string> | undefined;
+
+      if (item.dealSnapshot && item.dealSnapshot.menuItemIds.length > 0) {
+        menuItemIds = item.dealSnapshot.menuItemIds;
+        itemQuantities = item.dealSnapshot.itemQuantities;
+        selectedVariants = item.dealSnapshot.selectedVariants;
+      } else {
+        // Fallback: fetch live deal from Firestore (deal may have been deleted/changed)
+        const deal = await dealsRepo.getById(dealId);
+        if (deal && deal.menuItemIds) {
+          menuItemIds = deal.menuItemIds;
+          itemQuantities = deal.itemQuantities as Record<string, number> | undefined;
+          selectedVariants = deal.selectedVariants as Record<string, string> | undefined;
+        }
+      }
+
+      if (menuItemIds) {
+        for (const subId of menuItemIds) {
+          const variantId = selectedVariants?.[subId];
+          const subQty = itemQuantities?.[subId] ?? 1;
           resolved.push({
             menuItemId: subId,
             name: `${item.name} -> (Item in deal)`,
