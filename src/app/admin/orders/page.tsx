@@ -185,6 +185,8 @@ function AdminOrdersContent() {
                   type="button"
                   onClick={async () => {
                     if (confirm("Are you sure you want to delete this order?")) {
+                      // Optimistic UI update to make it disappear instantly
+                      setOrders((prev) => prev.filter((item) => item.id !== o.id));
                       try {
                         await deleteOrder(o.id);
                       } catch (err) {
