@@ -151,17 +151,26 @@ const ACTIVE_KITCHEN = new Set(["new", "preparing", "ready"]);
 const DONE_STATUS = new Set(["served", "delivered", "cancelled"]);
 
 export function subscribeKitchenOrders(callback: (orders: Order[]) => void): () => void {
-  return ordersRepo.subscribe([orderBy("createdAt", "asc"), limit(100)], (orders) => {
-    callback(
-      orders
-        .filter(
-          (o) =>
-            ACTIVE_KITCHEN.has(o.kitchenStatus ?? "new") &&
-            !DONE_STATUS.has(o.status)
-        )
-        .sort((a, b) => (a.dailyOrderNumber ?? 0) - (b.dailyOrderNumber ?? 0))
-    );
-  });
+  // Use a server-side `where` filter so the limit(100) applies only to active
+  // kitchen orders — not all historical orders. Without this, once there are
+  // >100 total orders in Firestore the 100-doc window fills up with old served/
+  // delivered orders and today's new orders never come back after a refresh.
+  // The composite index (kitchenStatus ASC, createdAt ASC) already exists in
+  // firestore.indexes.json so this query works without deploying a new index.
+  return ordersRepo.subscribe(
+    [
+      where("kitchenStatus", "in", ["new", "preparing", "ready"]),
+      orderBy("createdAt", "asc"),
+      limit(100),
+    ],
+    (orders) => {
+      callback(
+        orders
+          .filter((o) => !DONE_STATUS.has(o.status))
+          .sort((a, b) => (a.dailyOrderNumber ?? 0) - (b.dailyOrderNumber ?? 0))
+      );
+    }
+  );
 }
 
 export function subscribeDeliveryOrders(callback: (orders: Order[]) => void): () => void {
